@@ -1,0 +1,21 @@
+{
+  "name": "pratiraksha",
+  "version": "1.0.0",
+  "description": "Pratiraksha is an intelligent healthcare management platform designed to improve operational efficiency, resource utilization, and emergency preparedness within hospitals. By combining modern web technologies with machine learning, the platform enables healthcare administrators to monitor hospital operations in real time, anticipate patient surges before they occur, and make informed decisions based on predictive analytics.",
+  "main": "index.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/nikhileswark12/pratiraksha.git"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "type": "commonjs",
+  "bugs": {
+    "url": "https://github.com/nikhileswark12/pratiraksha/issues"
+  },
+  "homepage": "https://github.com/nikhileswark12/pratiraksha#readme"
+}

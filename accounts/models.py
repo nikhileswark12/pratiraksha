@@ -9,7 +9,7 @@ class User(AbstractUser):
     )
 
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
-    role = models.CharField(max_length=20, choices=ROLE_CHOICES)
+    role = models.CharField(max_length=20, choices=ROLE_CHOICES, db_index=True)
     hospital = models.ForeignKey(
         'hospitals.Hospital',
         on_delete=models.SET_NULL,
@@ -17,6 +17,11 @@ class User(AbstractUser):
         blank=True,
         related_name='users'
     )
+
+    class Meta:
+        indexes = [
+            models.Index(fields=['email']),
+        ]
 
     def __str__(self):
         return f"{self.username} ({self.role})"

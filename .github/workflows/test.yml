@@ -1,0 +1,68 @@
+name: PR and Push Tests
+
+on:
+  push:
+    branches:
+      - main
+  pull_request:
+    branches:
+      - main
+
+jobs:
+  test:
+    name: Run Tests & Audits
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.10'
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: '18'
+
+      - name: Install Python Dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+          pip install pytest-django pip-audit
+
+      - name: Run pip-audit
+        run: pip-audit
+
+      - name: Run pytest
+        run: |
+          # Use dev settings which use sqlite for testing
+          export DJANGO_SETTINGS_MODULE=pratiraksha.settings.dev
+          pytest
+
+      - name: Install Node Dependencies
+        run: npm install
+
+      - name: Run npm audit
+        run: npm audit
+
+      - name: Run ESLint
+        run: npm run lint --if-present
+
+  # deploy-frontend:
+  #   name: Deploy Frontend
+  #   needs: test
+  #   runs-on: ubuntu-latest
+  #   if: github.ref == 'refs/heads/main'
+  #   steps:
+  #     - run: echo "Deploy Frontend - NotImplemented"
+
+  # deploy-backend:
+  #   name: Deploy Backend & ML Services
+  #   needs: test
+  #   runs-on: ubuntu-latest
+  #   if: github.ref == 'refs/heads/main'
+  #   steps:
+  #     - run: echo "Deploy Backend - NotImplemented"

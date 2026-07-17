@@ -74,6 +74,44 @@ This architecture enables independent scaling of the frontend, backend, machine 
 
 ---
 
+## Local Development Setup
+
+Prerequisites:
+* Python 3.10+
+* Redis running on port `6379`
+* MongoDB running on port `27017`
+
+### 1. Environment Configuration
+Copy the template environment file and adjust if necessary (e.g. if your local Postgres isn't using sqlite fallback):
+```bash
+cp .env.template .env
+```
+
+### 2. Python Environment & Dependencies
+```bash
+python -m venv venv
+venv\Scripts\activate  # Or source venv/bin/activate on macOS/Linux
+pip install -r requirements.txt
+```
+
+### 3. Database Setup
+```bash
+python manage.py migrate
+```
+
+### 4. Run the Development Server
+```bash
+python manage.py runserver
+```
+
+### 5. Run the Celery Worker (In a separate terminal)
+```bash
+venv\Scripts\activate
+celery -A pratiraksha worker -l info
+```
+
+---
+
 ## Design Principles
 
 The platform is developed around several guiding principles:
