@@ -8,6 +8,17 @@ class Hospital(models.Model):
     zip_code = models.CharField(max_length=20)
     contact_number = models.CharField(max_length=50, blank=True)
     email = models.EmailField(blank=True)
+    
+    # Capacity and Status (added Day 5)
+    STATUS_CHOICES = [
+        ('NORMAL', 'Normal'),
+        ('WARNING', 'Warning'),
+        ('CRITICAL', 'Critical'),
+    ]
+    status = models.CharField(max_length=50, choices=STATUS_CHOICES, default='NORMAL')
+    total_capacity = models.IntegerField(default=0)
+    current_occupancy = models.IntegerField(default=0)
+
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 
