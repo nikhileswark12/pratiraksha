@@ -1,4 +1,5 @@
-from rest_framework import viewsets, mixins, permissions
+from django_filters.rest_framework import DjangoFilterBackend
+from rest_framework import viewsets, mixins, permissions, filters
 from rest_framework.decorators import action
 from rest_framework.response import Response
 
@@ -25,6 +26,10 @@ class HospitalViewSet(
     """
     queryset = Hospital.objects.all()
     permission_classes = [permissions.IsAuthenticated, CombinedHospitalPermission]
+    filter_backends = [DjangoFilterBackend, filters.SearchFilter, filters.OrderingFilter]
+    filterset_fields = ['status']
+    search_fields = ['name', 'address', 'zip_code']
+    ordering_fields = ['name', 'current_occupancy', 'created_at']
 
     def get_serializer_class(self):
         if self.action == 'list':
