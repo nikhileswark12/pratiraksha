@@ -12,7 +12,7 @@ class Hospital(models.Model):
     # Capacity and Status (added Day 5)
     STATUS_CHOICES = [
         ('NORMAL', 'Normal'),
-        ('WARNING', 'Warning'),
+        ('MODERATE', 'Moderate'),
         ('CRITICAL', 'Critical'),
     ]
     status = models.CharField(max_length=50, choices=STATUS_CHOICES, default='NORMAL')

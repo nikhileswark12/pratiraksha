@@ -3,6 +3,9 @@ from django.dispatch import receiver
 from channels.layers import get_channel_layer
 from asgiref.sync import async_to_sync
 from .models import Hospital
+from notifications.models import Notification
+from notifications.tasks import dispatch_notification
+from pratiraksha.utils import log_activity
 
 @receiver(post_save, sender=Hospital)
 def hospital_post_save(sender, instance, created, update_fields, **kwargs):
@@ -41,3 +44,25 @@ def hospital_post_save(sender, instance, created, update_fields, **kwargs):
         }
         async_to_sync(channel_layer.group_send)(global_group, critical_event)
         async_to_sync(channel_layer.group_send)(manager_group, critical_event)
+        
+        # Enqueue Notification
+        notif = Notification.objects.create(
+            type='email',
+            recipient='system_admin@test.com',
+            hospital_id=instance.id,
+            trigger_event='hospital_critical',
+            payload={
+                "hospital_name": instance.name,
+                "occupancy": instance.current_occupancy
+            }
+        )
+        dispatch_notification.delay(notif.id)
+
+    # Log to ActivityLog
+    log_activity(
+        actor="system",
+        action="hospital update",
+        resource_type="hospital",
+        resource_id=str(instance.id),
+        extra_data={"new_status": instance.status}
+    )

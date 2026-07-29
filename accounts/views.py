@@ -89,6 +89,15 @@ class LoginView(views.APIView):
             user.save(update_fields=['failed_login_attempts', 'account_locked_until', 'last_login'])
 
             tokens = get_tokens_for_user(user, remember_me)
+            
+            from pratiraksha.utils import log_activity
+            log_activity(
+                actor=str(user.id),
+                action="login",
+                resource_type="user",
+                resource_id=str(user.id)
+            )
+            
             return Response(tokens, status=status.HTTP_200_OK)
         else:
             # Increment failed attempts

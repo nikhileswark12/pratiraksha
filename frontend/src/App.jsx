@@ -3,6 +3,7 @@ import { BrowserRouter, Routes, Route, Navigate, Link } from 'react-router-dom';
 import PratirakshaDashboard from './components/PratirakshaDashboard';
 import HospitalList from './components/HospitalList';
 import HospitalDetail from './components/HospitalDetail';
+import AnalyticsDashboard from './components/AnalyticsDashboard';
 import { Activity, LogOut } from 'lucide-react';
 
 function Layout({ user, token, onLogout, children }) {
@@ -24,6 +25,7 @@ function Layout({ user, token, onLogout, children }) {
             <nav className="hidden md:flex gap-4 ml-6">
               <Link to="/" className="text-sm font-medium text-slate-600 hover:text-blue-600">Dashboard</Link>
               <Link to="/hospitals" className="text-sm font-medium text-slate-600 hover:text-blue-600">Hospitals</Link>
+              <Link to="/analytics" className="text-sm font-medium text-slate-600 hover:text-blue-600">Analytics</Link>
             </nav>
           </div>
           <div className="flex items-center gap-6">
@@ -121,6 +123,7 @@ function App() {
           <Route path="/" element={<PratirakshaDashboard token={token} onLogout={handleLogout} onUserLoaded={setUser} />} />
           <Route path="/hospitals" element={<HospitalList token={token} />} />
           <Route path="/hospitals/:id" element={<HospitalDetail token={token} />} />
+          <Route path="/analytics" element={<AnalyticsDashboard token={token} />} />
           <Route path="*" element={<Navigate to="/" replace />} />
         </Routes>
       </Layout>

@@ -4,21 +4,7 @@ from django.conf import settings
 from rest_framework import viewsets, permissions, status
 from rest_framework.response import Response
 from rest_framework.decorators import action
-from pymongo import MongoClient
-
-# Use a global client to avoid reconnecting on every request
-try:
-    mongo_client = MongoClient(settings.MONGO_URI, serverSelectionTimeoutMS=5000)
-    db = mongo_client.get_default_database()
-except Exception as e:
-    # Fallback to direct parse if get_default_database fails (e.g., if URI has no db name)
-    try:
-        mongo_client = MongoClient(settings.MONGO_URI, serverSelectionTimeoutMS=5000)
-        db_name = settings.MONGO_URI.split('/')[-1].split('?')[0] or 'pratiraksha'
-        db = mongo_client[db_name]
-    except Exception as inner_e:
-        mongo_client = None
-        db = None
+from pratiraksha.utils import get_mongo_db, log_activity
 
 
 class PredictionViewSet(viewsets.ViewSet):
@@ -85,21 +71,31 @@ class PredictionViewSet(viewsets.ViewSet):
         }
         
         # 5. Log to MongoDB
+        db = get_mongo_db()
         if db is not None:
             try:
                 log_doc = {
                     **response_data,
                     "input_data": data,
-                    "user_id": request.user.id,
+                    "user_id": str(request.user.id),
                     "created_at": datetime.datetime.utcnow()
                 }
                 db.predictions.insert_one(log_doc)
             except Exception as e:
                 print(f"MongoDB logging failed: {e}")
+                
+        log_activity(
+            actor=str(request.user.id),
+            action="prediction created",
+            resource_type="prediction",
+            resource_id=prediction_id,
+            extra_data={"risk_level": risk_level, "predicted_surge": predicted_surge}
+        )
         
         return Response(response_data, status=status.HTTP_201_CREATED)
 
     def list(self, request):
+        db = get_mongo_db()
         if db is None:
             return Response({"results": []})
         

@@ -1,7 +1,6 @@
 from django.test import TestCase
 
-# Create your tests here.
-
+from .models import User
 class UserRoleTestCase(TestCase):
     def test_user_creation(self):
         """Test that the user can be created with a specific role."""
