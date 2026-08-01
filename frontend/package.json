@@ -12,8 +12,10 @@
   "dependencies": {
     "date-fns": "^4.4.0",
     "lucide-react": "^1.25.0",
+    "mapbox-gl": "^3.27.0",
     "react": "^19.2.7",
     "react-dom": "^19.2.7",
+    "react-map-gl": "^8.1.2",
     "react-router-dom": "^7.18.1",
     "recharts": "^3.10.1"
   },

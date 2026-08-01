@@ -1,5 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { Activity, AlertTriangle, Building2, TrendingUp, Users, LogOut, Wifi, WifiOff } from 'lucide-react';
+import Map, { Marker, NavigationControl } from 'react-map-gl';
+import 'mapbox-gl/dist/mapbox-gl.css';
 
 const getStatusColor = (status) => {
   switch (status?.toUpperCase()) {
@@ -250,55 +252,43 @@ export default function PratirakshaDashboard({ token, onLogout, onUserLoaded }) 
             </div>
           </div>
 
-          {/* Topology Placeholder */}
+          {/* Mapbox Map */}
           <div className="bg-white rounded-xl border border-slate-200 shadow-sm flex flex-col">
-            <div className="px-6 py-4 border-b border-slate-200 bg-slate-50/50">
-              <h2 className="font-semibold text-slate-900">Network Topology</h2>
+            <div className="px-6 py-4 border-b border-slate-200 bg-slate-50/50 flex justify-between items-center">
+              <h2 className="font-semibold text-slate-900">Network Map</h2>
             </div>
-            <div className="p-6 flex-1 flex flex-col items-center justify-center min-h-[300px] bg-[radial-gradient(#e5e7eb_1px,transparent_1px)] [background-size:16px_16px]">
-              <div className="relative w-full h-full min-h-[250px] flex items-center justify-center">
-                {/* Central Node */}
-                <div className="absolute z-10 w-12 h-12 bg-blue-600 rounded-full flex items-center justify-center shadow-lg shadow-blue-600/20 ring-4 ring-blue-50">
-                  <Activity className="h-6 w-6 text-white" />
-                </div>
-                
-                {/* Simulated Nodes based on data scope */}
-                {hospitals.map((h, i) => {
-                  const angle = (i / hospitals.length) * Math.PI * 2;
-                  const radius = 90;
-                  const x = Math.cos(angle) * radius;
-                  const y = Math.sin(angle) * radius;
-                  
-                  return (
-                    <div key={h.id}>
-                      {/* Line */}
-                      <svg className="absolute inset-0 w-full h-full pointer-events-none" style={{ zIndex: 0 }}>
-                        <line 
-                          x1="50%" y1="50%" 
-                          x2={`calc(50% + ${x}px)`} y2={`calc(50% + ${y}px)`} 
-                          stroke="#cbd5e1" strokeWidth="2" strokeDasharray="4 4"
-                        />
-                      </svg>
-                      {/* Node */}
-                      <div 
-                        className="absolute w-8 h-8 bg-white border-2 rounded-full shadow-sm flex items-center justify-center"
-                        style={{
-                          transform: `translate(calc(${x}px - 50%), calc(${y}px - 50%))`,
-                          left: '50%', top: '50%',
-                          borderColor: h.status === 'CRITICAL' ? '#ef4444' : h.status === 'MODERATE' ? '#f59e0b' : '#10b981',
-                          zIndex: 10
-                        }}
-                        title={h.name}
-                      >
-                        <Building2 className="h-3 w-3 text-slate-600" />
-                      </div>
+            <div className="flex-1 relative min-h-[300px] overflow-hidden rounded-b-xl">
+              <Map
+                initialViewState={{
+                  longitude: 75.8573, // Default center, roughly Ludhiana
+                  latitude: 30.9010,
+                  zoom: 10
+                }}
+                mapStyle="mapbox://styles/mapbox/light-v11"
+                mapboxAccessToken={process.env.REACT_APP_MAPBOX_TOKEN || "YOUR_MAPBOX_TOKEN_HERE"}
+              >
+                <NavigationControl position="top-right" />
+                {hospitals.map(h => (
+                  <Marker 
+                    key={h.id} 
+                    longitude={h.longitude || (75.8 + Math.random() * 0.1)} 
+                    latitude={h.latitude || (30.85 + Math.random() * 0.1)} 
+                    anchor="bottom"
+                  >
+                    <div 
+                      className="w-8 h-8 bg-white border-2 rounded-full shadow-sm flex items-center justify-center cursor-pointer hover:scale-110 transition-transform"
+                      style={{
+                        borderColor: h.status === 'CRITICAL' ? '#ef4444' : h.status === 'MODERATE' ? '#f59e0b' : '#10b981',
+                        backgroundColor: flashingRows.has(h.id) ? '#eff6ff' : '#ffffff'
+                      }}
+                      title={h.name}
+                      onClick={() => window.location.href = `/hospitals/${h.id}`}
+                    >
+                      <Building2 className="h-4 w-4 text-slate-600" />
                     </div>
-                  );
-                })}
-              </div>
-              <p className="mt-4 text-xs text-slate-400 text-center">
-                Displaying {hospitals.length} active node{hospitals.length !== 1 && 's'} in current scope
-              </p>
+                  </Marker>
+                ))}
+              </Map>
             </div>
           </div>
         </div>

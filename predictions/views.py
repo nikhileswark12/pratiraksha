@@ -21,7 +21,10 @@ class PredictionViewSet(viewsets.ViewSet):
         city = data.get('city', 'Unknown')
         target_date = data.get('date', datetime.date.today().isoformat())
         
-        # 2. Heuristic Logic (Interim Model)
+        # ML Service temporarily disabled - reverting to heuristic fallback
+        prediction_id = str(uuid.uuid4())
+        
+        # 2. Heuristic Logic (Interim Model) Fallback
         surge = 0
         if pollution_level > 150:
             surge += 30
@@ -50,8 +53,7 @@ class PredictionViewSet(viewsets.ViewSet):
             risk_level = "LOW"
             
         # 4. Construct response shape per Section 6.3
-        prediction_id = str(uuid.uuid4())
-        response_data = {
+        fallback_data = {
             "id": prediction_id,
             "risk_level": risk_level,
             "risk_score": predicted_surge,
@@ -70,6 +72,10 @@ class PredictionViewSet(viewsets.ViewSet):
             "model_version": "rule-based-interim-0.1"
         }
         
+        # If response_data is not defined by ML service, use fallback
+        if 'response_data' not in locals():
+            response_data = fallback_data
+            
         # 5. Log to MongoDB
         db = get_mongo_db()
         if db is not None:
@@ -89,7 +95,7 @@ class PredictionViewSet(viewsets.ViewSet):
             action="prediction created",
             resource_type="prediction",
             resource_id=prediction_id,
-            extra_data={"risk_level": risk_level, "predicted_surge": predicted_surge}
+            extra_data={"risk_level": response_data.get("risk_level", risk_level), "predicted_surge": response_data.get("predicted_surge", predicted_surge)}
         )
         
         return Response(response_data, status=status.HTTP_201_CREATED)
