@@ -25,6 +25,9 @@ def test_contract():
         'pollution_level': 110.0,
         'temperature': 38.5,
         'humidity': 85.0,
+        'rainfall': 0.0,
+        'prev_day_admissions': 50.0,
+        'weekly_avg_admissions': 50.0,
         'city': 'Delhi',
         'date': datetime.date.today().isoformat()
     }
@@ -43,8 +46,10 @@ def test_contract():
     
     features = [
         day, month, hour, weekend_flag, festival_flag,
-        50, 50, 200, season, input_payload['pollution_level'],
-        input_payload['temperature'], input_payload['humidity']
+        input_payload['prev_day_admissions'], input_payload['weekly_avg_admissions'], 
+        season, input_payload['pollution_level'],
+        input_payload['temperature'], input_payload['humidity'],
+        input_payload['rainfall']
     ]
     
     with open('ml_service/scaler.pkl', 'rb') as f:

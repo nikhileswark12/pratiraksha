@@ -46,7 +46,7 @@ function Layout({ user, token, onLogout, children }) {
 function App() {
   const [token, setToken] = useState(localStorage.getItem('access_token'));
   const [user, setUser] = useState(null); // Assuming user state might be needed globally
-  const [username, setUsername] = useState('');
+  const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
 
@@ -56,18 +56,23 @@ function App() {
       const res = await fetch('http://localhost:8000/api/v1/auth/login/', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ username, password })
+        body: JSON.stringify({ email, password })
       });
-      const data = await res.json();
+      let data;
+      try {
+        data = await res.json();
+      } catch (parseErr) {
+        throw new Error(`Server returned ${res.status} ${res.statusText}`);
+      }
       if (res.ok) {
         localStorage.setItem('access_token', data.access);
         localStorage.setItem('refresh_token', data.refresh);
         setToken(data.access);
       } else {
-        setError(data.detail || 'Login failed');
+        setError(data.error || data.detail || `Login failed: ${res.status} ${res.statusText}`);
       }
     } catch (err) {
-      setError('Connection error');
+      setError(err.message === 'Failed to fetch' ? 'Connection error - Backend unreachable' : err.message);
     }
   };
 
@@ -85,11 +90,11 @@ function App() {
           {error && <div className="bg-red-50 text-red-600 p-3 rounded-lg mb-4 text-sm">{error}</div>}
           <form onSubmit={handleLogin} className="space-y-4">
             <div>
-              <label className="block text-sm font-medium text-slate-700 mb-1">Username</label>
+              <label className="block text-sm font-medium text-slate-700 mb-1">Email</label>
               <input
-                type="text"
-                value={username}
-                onChange={(e) => setUsername(e.target.value)}
+                type="email"
+                value={email}
+                onChange={(e) => setEmail(e.target.value)}
                 className="w-full px-3 py-2 border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
                 required
               />

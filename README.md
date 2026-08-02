@@ -125,6 +125,14 @@ The platform is developed around several guiding principles:
 
 ---
 
+## Known Limitations
+
+**Machine Learning Temporal Bounds:** The predictive surge model is trained strictly on real, validated historical data from **Mar 25, 2017 to Mar 31, 2019**. The late-2019 timeframe (Apr–Dec 2019) is explicitly excluded due to an unrecoverable gap in the underlying environmental (AQI/Humidity) datasets. Any predictions made for inputs resembling conditions outside this exact training window represent extrapolations rather than interpolations, and should be evaluated with caution.
+
+**Admissions Data Proxy:** The ML model was trained on actual daily admission counts with a mean of **12.7 admissions per day** (max 50) at a single-hospital scale. The live platform does not yet track individual patient admission events over time. As a stopgap, `prev_day_admissions` and `weekly_avg_admissions` are derived dynamically from a specific hospital's `current_occupancy` (using a 5% daily turnover multiplier). This correctly scales the inputs into the model's trained distribution. However, because the ML model is fundamentally scoped to single hospitals, **network-wide predictions explicitly bypass the ML service** and route to the heuristic engine instead. These derived values remain a proxy and are *not* equivalent to real admission tracking.
+
+---
+
 ## Future Scope
 
 Pratiraksha is designed to evolve into a comprehensive intelligent healthcare ecosystem. Planned enhancements include advanced machine learning models, multi-hospital coordination, interactive geospatial visualization, mobile applications, automated report generation, IoT device integration, external healthcare system interoperability, AI-assisted resource optimization, and predictive operational planning.

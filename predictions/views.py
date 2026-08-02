@@ -1,9 +1,12 @@
 import uuid
 import datetime
+import requests
 from django.conf import settings
 from rest_framework import viewsets, permissions, status
 from rest_framework.response import Response
 from rest_framework.decorators import action
+from django.db.models import Sum
+from hospitals.models import Hospital
 from pratiraksha.utils import get_mongo_db, log_activity
 
 
@@ -18,11 +21,58 @@ class PredictionViewSet(viewsets.ViewSet):
         pollution_level = float(data.get('pollution_level', 50))
         temperature = float(data.get('temperature', 25))
         humidity = float(data.get('humidity', 50))
+        rainfall_val = data.get('rainfall')
+        rainfall = float(rainfall_val) if rainfall_val is not None else 0.0
         city = data.get('city', 'Unknown')
         target_date = data.get('date', datetime.date.today().isoformat())
+        hospital_id = data.get('hospital_id')
         
-        # ML Service temporarily disabled - reverting to heuristic fallback
         prediction_id = str(uuid.uuid4())
+        
+        is_network_wide = not bool(hospital_id)
+        
+        if is_network_wide:
+            print("Network-wide prediction requested. Bypassing ML service (single-hospital scale) and using heuristic.")
+        else:
+            try:
+                hospital = Hospital.objects.get(id=hospital_id)
+                # Compute proxy scoped strictly to THIS hospital's occupancy
+                # 0.05 (5%) multiplier produces proxy values in the ~0-50 range expected by the model
+                total_occupancy = hospital.current_occupancy
+                prev_day_admissions = float(total_occupancy * 0.05)
+                weekly_avg_admissions = float(total_occupancy * 0.05)
+                
+                # Try ML Service first
+                ml_payload = {
+                    "event": event,
+                    "pollution_level": pollution_level,
+                    "temperature": temperature,
+                    "humidity": humidity,
+                    "rainfall": rainfall,
+                    "prev_day_admissions": prev_day_admissions,
+                    "weekly_avg_admissions": weekly_avg_admissions,
+                    "city": city,
+                    "date": target_date
+                }
+                
+                resp = requests.post("http://127.0.0.1:8001/predict", json=ml_payload, timeout=5)
+                resp.raise_for_status()
+                ml_data = resp.json()
+                
+                response_data = {
+                    "id": prediction_id,
+                    "risk_level": ml_data["risk_level"],
+                    "risk_score": ml_data["risk_score"],
+                    "predicted_surge": ml_data["predicted_surge"],
+                    "confidence": ml_data.get("confidence", 85.0),
+                    "affected_departments": ml_data.get("affected_departments", ["ER"]),
+                    "recommended_actions": ml_data.get("recommended_actions", []),
+                    "resource_requirements": ml_data.get("resource_requirements", {}),
+                    "timeline": ml_data.get("timeline", target_date),
+                    "model_version": ml_data.get("model_version", "surge-predictor-v1-733rows")
+                }
+            except Exception as e:
+                print(f"ML Service failed or hospital invalid: {e}. Falling back to heuristic.")
         
         # 2. Heuristic Logic (Interim Model) Fallback
         surge = 0

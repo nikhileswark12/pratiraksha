@@ -1,5 +1,6 @@
 from fastapi import FastAPI, HTTPException
 from pydantic import BaseModel
+from typing import Optional
 import torch
 import torch.nn as nn
 import pickle
@@ -26,7 +27,7 @@ class SurgePredictorModel(nn.Module):
 try:
     with open('scaler.pkl', 'rb') as f:
         scaler = pickle.load(f)
-    model = SurgePredictorModel(input_dim=13) # 14 features
+    model = SurgePredictorModel(input_dim=12) # 12 features
     model.load_state_dict(torch.load('surge_predictor_best.pth'))
     model.eval()
     model_loaded = True
@@ -39,6 +40,9 @@ class PredictionRequest(BaseModel):
     pollution_level: float = 50.0
     temperature: float = 25.0
     humidity: float = 50.0
+    rainfall: Optional[float] = None
+    prev_day_admissions: float
+    weekly_avg_admissions: float
     city: str = 'Unknown'
     date: str = datetime.date.today().isoformat()
 
@@ -46,6 +50,9 @@ class PredictionRequest(BaseModel):
 def predict_surge(req: PredictionRequest):
     if not model_loaded:
         raise HTTPException(status_code=503, detail='Model not initialized')
+        
+    if req.rainfall is None:
+        raise HTTPException(status_code=400, detail='Rainfall data is required for inference')
         
     try:
         dt = pd.to_datetime(req.date)
@@ -62,8 +69,8 @@ def predict_surge(req: PredictionRequest):
         
         features = [
             day, month, hour, weekend_flag, festival_flag,
-            50, 50, 200, season, req.pollution_level,
-            req.temperature, req.humidity, 0
+            req.prev_day_admissions, req.weekly_avg_admissions, season, req.pollution_level,
+            req.temperature, req.humidity, req.rainfall
         ]
         
         x_scaled = scaler.transform([features])
@@ -85,7 +92,7 @@ def predict_surge(req: PredictionRequest):
             'recommended_actions': ['Monitor situation' if risk_level == 'LOW' else 'Alert on-call staff'],
             'resource_requirements': {'beds': int(predicted_surge/10)+5},
             'timeline': req.date,
-            'model_version': 'surge-predictor-v1.0'
+            'model_version': 'surge-predictor-v1-733rows'
         }
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))

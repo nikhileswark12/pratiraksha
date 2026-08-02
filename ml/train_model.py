@@ -13,20 +13,21 @@ df = pd.read_parquet('datasets/train_v1.parquet')
 
 # Include weather features (HDHI Pollution Data)
 features = ['day', 'month', 'hour', 'weekend_flag', 'festival_flag',
-            'prev_day_admissions', 'weekly_avg_admissions', 'bed_capacity', 
-            'season', 'AQI', 'temperature', 'humidity']
+            'prev_day_admissions', 'weekly_avg_admissions', 
+            'season', 'AQI', 'temperature', 'humidity', 'rainfall']
 target = 'target_surge'
 
-# Handle NaNs for PyTorch
-df['AQI'] = df['AQI'].fillna(df['AQI'].median()).fillna(50)
-df['temperature'] = df['temperature'].fillna(df['temperature'].median()).fillna(0)
-df['humidity'] = df['humidity'].fillna(df['humidity'].median()).fillna(0)
+# Drop NaN rows to strictly use complete, honest data
+initial_rows = len(df)
+df = df.dropna(subset=features)
+print(f"Row count after dropping NaNs: {len(df)} (down from {initial_rows})")
 
 X = df[features].values
 y = df[target].values.reshape(-1, 1)
 
-X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, random_state=42)
-X_train, X_val, y_train, y_val = train_test_split(X_train, y_train, test_size=0.2, random_state=42)
+# Chronological split (shuffle=False) to prevent data leakage on rolling features
+X_temp, X_test, y_temp, y_test = train_test_split(X, y, test_size=0.2, shuffle=False)
+X_train, X_val, y_train, y_val = train_test_split(X_temp, y_temp, test_size=0.2, shuffle=False)
 
 scaler_X = StandardScaler()
 X_train_scaled = scaler_X.fit_transform(X_train)

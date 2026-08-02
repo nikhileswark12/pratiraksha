@@ -1,7 +1,8 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { Activity, AlertTriangle, Building2, TrendingUp, Users, LogOut, Wifi, WifiOff } from 'lucide-react';
-import Map, { Marker, NavigationControl } from 'react-map-gl';
-import 'mapbox-gl/dist/mapbox-gl.css';
+import { MapContainer, TileLayer, Marker, Popup } from 'react-leaflet';
+import L from 'leaflet';
+import 'leaflet/dist/leaflet.css';
 
 const getStatusColor = (status) => {
   switch (status?.toUpperCase()) {
@@ -19,6 +20,19 @@ const getStatusDot = (status) => {
     case 'NORMAL': return 'bg-emerald-500';
     default: return 'bg-slate-500';
   }
+};
+
+const createCustomIcon = (status, isFlashing) => {
+  const borderColor = status === 'CRITICAL' ? '#ef4444' : status === 'MODERATE' ? '#f59e0b' : '#10b981';
+  const bgColor = isFlashing ? '#eff6ff' : '#ffffff';
+  const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="color: #475569;"><rect x="4" y="2" width="16" height="20" rx="2" ry="2"></rect><path d="M9 22v-4h6v4"></path><path d="M8 6h.01"></path><path d="M16 6h.01"></path><path d="M12 6h.01"></path><path d="M12 10h.01"></path><path d="M12 14h.01"></path><path d="M16 10h.01"></path><path d="M16 14h.01"></path><path d="M8 10h.01"></path><path d="M8 14h.01"></path></svg>`;
+  
+  return L.divIcon({
+    className: 'custom-leaflet-icon',
+    html: `<div style="width: 32px; height: 32px; background-color: ${bgColor}; border: 2px solid ${borderColor}; border-radius: 50%; box-shadow: 0 1px 2px 0 rgba(0, 0, 0, 0.05); display: flex; align-items: center; justify-content: center; cursor: pointer;">${svg}</div>`,
+    iconSize: [32, 32],
+    iconAnchor: [16, 32]
+  });
 };
 
 export default function PratirakshaDashboard({ token, onLogout, onUserLoaded }) {
@@ -252,43 +266,38 @@ export default function PratirakshaDashboard({ token, onLogout, onUserLoaded }) 
             </div>
           </div>
 
-          {/* Mapbox Map */}
+          {/* Network Map */}
           <div className="bg-white rounded-xl border border-slate-200 shadow-sm flex flex-col">
             <div className="px-6 py-4 border-b border-slate-200 bg-slate-50/50 flex justify-between items-center">
               <h2 className="font-semibold text-slate-900">Network Map</h2>
             </div>
-            <div className="flex-1 relative min-h-[300px] overflow-hidden rounded-b-xl">
-              <Map
-                initialViewState={{
-                  longitude: 75.8573, // Default center, roughly Ludhiana
-                  latitude: 30.9010,
-                  zoom: 10
-                }}
-                mapStyle="mapbox://styles/mapbox/light-v11"
-                mapboxAccessToken={process.env.REACT_APP_MAPBOX_TOKEN || "YOUR_MAPBOX_TOKEN_HERE"}
+            <div className="flex-1 relative min-h-[300px] overflow-hidden rounded-b-xl z-0">
+              <MapContainer 
+                center={[30.9010, 75.8573]} 
+                zoom={10} 
+                style={{ height: '100%', width: '100%' }}
               >
-                <NavigationControl position="top-right" />
+                <TileLayer
+                  attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
+                  url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
+                />
                 {hospitals.map(h => (
                   <Marker 
-                    key={h.id} 
-                    longitude={h.longitude || (75.8 + Math.random() * 0.1)} 
-                    latitude={h.latitude || (30.85 + Math.random() * 0.1)} 
-                    anchor="bottom"
+                    key={h.id}
+                    position={[h.latitude || (30.85 + Math.random() * 0.1), h.longitude || (75.8 + Math.random() * 0.1)]}
+                    icon={createCustomIcon(h.status, flashingRows.has(h.id))}
+                    eventHandlers={{
+                      click: () => window.location.href = `/hospitals/${h.id}`
+                    }}
                   >
-                    <div 
-                      className="w-8 h-8 bg-white border-2 rounded-full shadow-sm flex items-center justify-center cursor-pointer hover:scale-110 transition-transform"
-                      style={{
-                        borderColor: h.status === 'CRITICAL' ? '#ef4444' : h.status === 'MODERATE' ? '#f59e0b' : '#10b981',
-                        backgroundColor: flashingRows.has(h.id) ? '#eff6ff' : '#ffffff'
-                      }}
-                      title={h.name}
-                      onClick={() => window.location.href = `/hospitals/${h.id}`}
-                    >
-                      <Building2 className="h-4 w-4 text-slate-600" />
-                    </div>
+                    <Popup>
+                      <strong>{h.name}</strong><br />
+                      Status: {h.status}<br />
+                      Occupancy: {h.current_occupancy}/{h.total_capacity}
+                    </Popup>
                   </Marker>
                 ))}
-              </Map>
+              </MapContainer>
             </div>
           </div>
         </div>
