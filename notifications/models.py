@@ -21,6 +21,7 @@ class Notification(models.Model):
     trigger_event = models.CharField(max_length=100)
     status = models.CharField(max_length=20, choices=STATUS_CHOICES, default='queued')
     payload = models.JSONField(default=dict)
+    error_message = models.TextField(null=True, blank=True)
     created_at = models.DateTimeField(auto_now_add=True)
 
     def __str__(self):

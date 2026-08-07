@@ -61,6 +61,7 @@ INSTALLED_APPS = [
     'notifications',
     'agents',
     'django_filters',
+    'anymail',
 ]
 
 MIDDLEWARE = [
@@ -216,3 +217,19 @@ CHANNEL_LAYERS = {
         },
     },
 }
+
+# Media files
+MEDIA_URL = '/media/'
+MEDIA_ROOT = BASE_DIR / 'media'
+
+# Communications (Anymail / SendGrid)
+ANYMAIL = {
+    "SENDGRID_API_KEY": os.environ.get("SENDGRID_API_KEY", ""),
+}
+EMAIL_BACKEND = "anymail.backends.sendgrid.EmailBackend"
+DEFAULT_FROM_EMAIL = os.environ.get("DEFAULT_FROM_EMAIL", "noreply@pratiraksha.test")
+
+# Communications (Twilio)
+TWILIO_ACCOUNT_SID = os.environ.get("TWILIO_ACCOUNT_SID", "")
+TWILIO_AUTH_TOKEN = os.environ.get("TWILIO_AUTH_TOKEN", "")
+TWILIO_FROM_NUMBER = os.environ.get("TWILIO_FROM_NUMBER", "")
