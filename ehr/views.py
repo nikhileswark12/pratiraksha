@@ -5,23 +5,30 @@ from django.db.models import Count, Q
 from hospitals.models import Hospital
 from .models import (
     Patient, Encounter, Vital, Diagnosis, Prescription, 
-    LabResult, EHRAccessLog, DischargeSummary
+    LabResult, DischargeSummary
 )
 from .serializers import (
     PatientSerializer, EncounterSerializer, VitalSerializer,
     DiagnosisSerializer, PrescriptionSerializer, LabResultSerializer
 )
 from .tasks import generate_discharge_summary
+from pratiraksha.utils import get_mongo_db
+import datetime
 
-def log_ehr_access(hospital_id, patient_id, actor, action, resource_type, resource_id):
-    EHRAccessLog.objects.create(
-        hospital_id=hospital_id,
-        patient_id=patient_id,
-        actor=actor,
-        action=action,
-        resource_type=resource_type,
-        resource_id=resource_id
-    )
+def log_ehr_access(hospital_id, patient_id, actor, action, resource_type, resource_id, fields_accessed=None):
+    db = get_mongo_db()
+    if db is not None:
+        db.ehr_access_logs.insert_one({
+            "hospital_id": str(hospital_id),
+            "patient_id": str(patient_id) if patient_id else None,
+            "actor_id": str(actor.id) if actor else None,
+            "actor_role": actor.role if actor else None,
+            "action": action,
+            "resource_type": resource_type,
+            "resource_id": str(resource_id),
+            "fields_accessed": fields_accessed or [],
+            "timestamp": datetime.datetime.utcnow()
+        })
 
 class PatientCreateView(views.APIView):
     permission_classes = [permissions.IsAuthenticated]
@@ -49,7 +56,8 @@ class PatientCreateView(views.APIView):
                 actor=request.user,
                 action="create_patient",
                 resource_type="Patient",
-                resource_id=str(patient.id)
+                resource_id=str(patient.id),
+                fields_accessed=["name", "date_of_birth", "gender", "contact_phone", "emergency_contact"]
             )
             
             return Response(serializer.data, status=status.HTTP_201_CREATED)
@@ -73,7 +81,7 @@ class EncounterCreateView(views.APIView):
                 
             encounter = serializer.save(hospital=hospital, patient=patient, status='OPEN')
             
-            log_ehr_access(hospital.id, patient.id, request.user, "create_encounter", "Encounter", str(encounter.id))
+            log_ehr_access(hospital.id, patient.id, request.user, "create_encounter", "Encounter", str(encounter.id), fields_accessed=["encounter_type", "status", "patient_id"])
             return Response(serializer.data, status=status.HTTP_201_CREATED)
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
@@ -96,7 +104,7 @@ class EncounterDischargeView(views.APIView):
         encounter.discharged_at = timezone.now()
         encounter.save()
         
-        log_ehr_access(encounter.hospital.id, encounter.patient.id, request.user, "discharge_encounter", "Encounter", str(encounter.id))
+        log_ehr_access(encounter.hospital.id, encounter.patient.id, request.user, "discharge_encounter", "Encounter", str(encounter.id), fields_accessed=["status", "discharged_at"])
         
         # Enqueue discharge summary task
         summary = DischargeSummary.objects.create(
@@ -126,7 +134,7 @@ class EncounterCloseView(views.APIView):
             
         encounter.status = 'CLOSED'
         encounter.save()
-        log_ehr_access(encounter.hospital.id, encounter.patient.id, request.user, "close_encounter", "Encounter", str(encounter.id))
+        log_ehr_access(encounter.hospital.id, encounter.patient.id, request.user, "close_encounter", "Encounter", str(encounter.id), fields_accessed=["status"])
         return Response({"status": "CLOSED"})
 
 # Clinical endpoints base class to avoid repetition
@@ -165,7 +173,8 @@ class BaseClinicalCreateView(views.APIView):
                 except self.serializer_class.Meta.model.DoesNotExist:
                     pass
             
-            log_ehr_access(encounter.hospital.id, encounter.patient.id, request.user, f"create_{self.resource_name}", self.resource_name, str(instance.id))
+            fields_accessed = list(serializer.validated_data.keys())
+            log_ehr_access(encounter.hospital.id, encounter.patient.id, request.user, f"create_{self.resource_name}", self.resource_name, str(instance.id), fields_accessed=fields_accessed)
             
             return Response(self.serializer_class(instance).data, status=status.HTTP_201_CREATED)
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
@@ -218,6 +227,7 @@ class PatientTimelineView(views.APIView):
             
         timeline.sort(key=lambda x: x["timestamp"], reverse=True)
         
+        log_ehr_access(patient.hospital.id, patient.id, request.user, "read_timeline", "Patient", str(patient.id), fields_accessed=["*"])
         return Response({"patient": PatientSerializer(patient).data, "timeline": timeline})
 
 class DischargeSummaryStatusView(views.APIView):
@@ -242,18 +252,28 @@ class DischargeSummaryStatusView(views.APIView):
         elif summary.status == 'failed':
             response_data["error_message"] = summary.error_message
             
+        log_ehr_access(summary.hospital.id, summary.encounter.patient.id, request.user, "read_discharge_summary_status", "DischargeSummary", str(summary.id), fields_accessed=["status", "file_url", "error_message"])
+            
         return Response(response_data)
+
+from django.utils.decorators import method_decorator
+from django.views.decorators.cache import cache_page
+from django.views.decorators.vary import vary_on_headers
 
 class CapacityFeedView(views.APIView):
     permission_classes = [permissions.IsAuthenticated]
 
+    @method_decorator(cache_page(60))
+    @method_decorator(vary_on_headers('Authorization'))
     def get(self, request):
         if request.user.role == 'hospital_manager':
             if not request.user.hospital:
                 return Response({"error": "Forbidden: Hospital manager has no assigned hospital."}, status=status.HTTP_403_FORBIDDEN)
             hospitals = Hospital.objects.filter(id=request.user.hospital.id)
         else:
-            hospitals = Hospital.objects.all()
+            if not request.user.tenant:
+                return Response({"error": "Forbidden: Operator has no assigned tenant."}, status=status.HTTP_403_FORBIDDEN)
+            hospitals = Hospital.objects.filter(tenant=request.user.tenant)
             
         hospitals = hospitals.annotate(
             current_admitted=Count('encounters', filter=Q(encounters__status='OPEN', encounters__encounter_type='IPD')),
@@ -273,6 +293,12 @@ class CapacityFeedView(views.APIView):
             
         # Explicit confirmation: No patient identifiable data is fetched or returned here.
         # This purely runs aggregate COUNT operations grouped by hospital.
+        
+        if request.user.role == 'hospital_manager':
+            log_ehr_access(request.user.hospital.id, None, request.user, "read_capacity_feed", "Encounter", "aggregate", fields_accessed=["status", "encounter_type"])
+        else:
+            log_ehr_access("network", None, request.user, "read_capacity_feed", "Encounter", "aggregate", fields_accessed=["status", "encounter_type"])
+            
         return Response({
             "aggregate_metrics": feed_data
         })

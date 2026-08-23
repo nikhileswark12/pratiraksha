@@ -6,7 +6,7 @@ from datetime import timedelta
 from django.conf import settings
 import datetime
 import random
-from hospitals.models import Hospital
+from hospitals.models import Hospital, Department, Equipment
 from pratiraksha.utils import get_mongo_db
 
 
@@ -15,7 +15,11 @@ class AnalyticsOverviewView(views.APIView):
 
     def get(self, request):
         # 1. Hospital counts by status
-        hospitals = Hospital.objects.all()
+        if request.user.role == 'hospital_manager':
+            hospitals = Hospital.objects.filter(id=request.user.hospital_id)
+        else:
+            hospitals = Hospital.objects.filter(tenant=request.user.tenant_id) if request.user.tenant_id else Hospital.objects.none()
+            
         total_hospitals = hospitals.count()
         status_counts = list(hospitals.values('status').annotate(count=Count('status')))
         
@@ -56,13 +60,27 @@ class AnalyticsOverviewView(views.APIView):
         else:
             return Response({"error": "Analytics database unavailable."}, status=status.HTTP_503_SERVICE_UNAVAILABLE)
                 
+        # 3. Operational Tracking (Day 23)
+        total_departments = Department.objects.count()
+        total_equipment = Equipment.objects.aggregate(
+            total=Sum('quantity_total'),
+            in_use=Sum('quantity_in_use'),
+            maintenance=Sum('quantity_maintenance')
+        )
+        
         return Response({
             "total_hospitals": total_hospitals,
             "status_summary": status_summary,
             "total_beds": total_beds,
             "avg_occupancy_percent": avg_occupancy,
             "predictions_today": today_predictions,
-            "predictions_this_week": week_predictions
+            "predictions_this_week": week_predictions,
+            "total_departments": total_departments,
+            "equipment_summary": {
+                "total": total_equipment['total'] or 0,
+                "in_use": total_equipment['in_use'] or 0,
+                "maintenance": total_equipment['maintenance'] or 0
+            }
         })
 
 
@@ -144,6 +162,10 @@ class AnalyticsCompareView(views.APIView):
                 requested_ids = [str(request.user.hospital_id)]
             else:
                 requested_ids = []
+        else:
+            # Operator: limit to their tenant
+            allowed_hospitals = set(str(h.id) for h in Hospital.objects.filter(tenant=request.user.tenant_id)) if request.user.tenant_id else set()
+            requested_ids = [hid for hid in requested_ids if hid in allowed_hospitals]
                 
         if not requested_ids:
             return Response({"results": []})
@@ -235,8 +257,13 @@ class ReportRequestView(views.APIView):
                 requested_ids = [str(request.user.hospital_id)]
             else:
                 requested_ids = []
-        elif not requested_ids:
-            requested_ids = [str(h.id) for h in Hospital.objects.all()]
+        else:
+            # Operator
+            allowed_hospitals = set(str(h.id) for h in Hospital.objects.filter(tenant=request.user.tenant_id)) if request.user.tenant_id else set()
+            if not requested_ids:
+                requested_ids = list(allowed_hospitals)
+            else:
+                requested_ids = [hid for hid in requested_ids if hid in allowed_hospitals]
                 
         if not requested_ids:
             return Response({"error": "No valid facilities selected for reporting."}, status=status.HTTP_400_BAD_REQUEST)

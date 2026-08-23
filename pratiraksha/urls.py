@@ -20,7 +20,11 @@ from django.urls import path, include
 from django.conf import settings
 from django.conf.urls.static import static
 
+def trigger_error(request):
+    division_by_zero = 1 / 0
+
 urlpatterns = [
+    path('sentry-debug/', trigger_error),
     path('admin/', admin.site.urls),
     path('api/v1/auth/', include('accounts.urls')),
     path('api/v1/hospitals/', include('hospitals.urls')),
@@ -28,6 +32,9 @@ urlpatterns = [
     path('api/v1/analytics/', include('analytics.urls')),
     path('api/v1/crisis/', include('crisis.urls')),
     path('api/v1/ehr/', include('ehr.urls')),
+    
+    # API v2
+    path('api/v2/', include('pratiraksha.urls_v2')),
 ]
 
 if settings.DEBUG:

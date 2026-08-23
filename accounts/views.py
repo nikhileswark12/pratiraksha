@@ -9,9 +9,14 @@ from rest_framework.throttling import AnonRateThrottle
 from rest_framework_simplejwt.tokens import RefreshToken
 from rest_framework_simplejwt.views import TokenRefreshView
 from rest_framework_simplejwt.exceptions import InvalidToken
+from allauth.socialaccount.providers.google.views import GoogleOAuth2Adapter
+from allauth.socialaccount.providers.github.views import GitHubOAuth2Adapter
+from allauth.socialaccount.providers.oauth2.client import OAuth2Client
+from dj_rest_auth.registration.views import SocialLoginView
 
 from .models import User
 from .serializers import RegisterSerializer, UserSerializer
+from pratiraksha.utils import log_compliance_event
 
 def get_tokens_for_user(user, remember_me=False):
     refresh = RefreshToken.for_user(user)
@@ -51,6 +56,14 @@ class RegisterView(views.APIView):
         if serializer.is_valid():
             user = serializer.save()
             tokens = get_tokens_for_user(user)
+            
+            log_compliance_event(
+                actor=str(user.id),
+                action="role_assigned_at_registration",
+                resource_type="auth",
+                extra_data={"role": user.role, "hospital_id": str(user.hospital_id) if user.hospital_id else None}
+            )
+            
             return Response(tokens, status=status.HTTP_201_CREATED)
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
@@ -135,3 +148,13 @@ class MeView(generics.RetrieveAPIView):
 
     def get_object(self):
         return self.request.user
+
+class GoogleLogin(SocialLoginView):
+    adapter_class = GoogleOAuth2Adapter
+    callback_url = 'http://localhost:3000/auth/google/callback'
+    client_class = OAuth2Client
+
+class GitHubLogin(SocialLoginView):
+    adapter_class = GitHubOAuth2Adapter
+    callback_url = 'http://localhost:3000/auth/github/callback'
+    client_class = OAuth2Client

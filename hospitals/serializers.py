@@ -4,14 +4,14 @@ from .models import Hospital, Department, Equipment
 class DepartmentSerializer(serializers.ModelSerializer):
     class Meta:
         model = Department
-        fields = ('id', 'name', 'contact_number', 'created_at', 'updated_at')
+        fields = ('id', 'name', 'contact_number', 'total_capacity', 'current_occupancy', 'created_at', 'updated_at')
 
 class EquipmentSerializer(serializers.ModelSerializer):
     department_name = serializers.CharField(source='department.name', read_only=True)
 
     class Meta:
         model = Equipment
-        fields = ('id', 'name', 'equipment_type', 'status', 'department', 'department_name', 'created_at', 'updated_at')
+        fields = ('id', 'name', 'equipment_type', 'status', 'department', 'department_name', 'quantity_total', 'quantity_available', 'quantity_in_use', 'quantity_maintenance', 'created_at', 'updated_at')
 
 class HospitalListSerializer(serializers.ModelSerializer):
     class Meta:

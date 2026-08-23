@@ -53,3 +53,30 @@ def log_activity(actor, action, resource_type=None, resource_id=None, extra_data
     except Exception as e:
         logger.error(f"Failed to log activity to MongoDB: {e}")
         return False
+
+def log_compliance_event(actor, action, resource_type=None, resource_id=None, extra_data=None):
+    """
+    Logs compliance-sensitive events to the MongoDB compliance_logs collection.
+    Matches EHRAccessLog precedent: no TTL, strictly retention-locked.
+    """
+    db = get_mongo_db()
+    if db is None:
+        logger.error(f"Cannot log compliance event '{action}': MongoDB is unavailable.")
+        return False
+        
+    doc = {
+        "actor": actor,
+        "action": action,
+        "resource_type": resource_type,
+        "resource_id": str(resource_id) if resource_id else None,
+        "timestamp": datetime.datetime.utcnow(),
+    }
+    if extra_data:
+        doc["extra_data"] = extra_data
+        
+    try:
+        db.compliance_logs.insert_one(doc)
+        return True
+    except Exception as e:
+        logger.error(f"Failed to log compliance event to MongoDB: {e}")
+        return False

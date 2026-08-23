@@ -6,6 +6,7 @@ class Notification(models.Model):
         ('email', 'Email'),
         ('sms', 'SMS'),
         ('websocket', 'WebSocket'),
+        ('push', 'Push'),
     )
     STATUS_CHOICES = (
         ('queued', 'Queued'),

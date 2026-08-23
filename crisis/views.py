@@ -4,6 +4,7 @@ from rest_framework import views, permissions, status
 from rest_framework.response import Response
 from django.conf import settings
 from pratiraksha.utils import get_mongo_db, log_activity
+from integrations.tasks import dispatch_webhook_event
 
 class CrisisSimulationView(views.APIView):
     permission_classes = [permissions.IsAuthenticated]
@@ -133,6 +134,12 @@ class CrisisSimulationView(views.APIView):
             resource_type="simulation",
             resource_id=simulation_id,
             extra_data={"scenario": scenario, "logged": response_data.get("logged", False)}
+        )
+        
+        # Dispatch webhook for crisis simulation
+        dispatch_webhook_event.delay(
+            event_type='crisis.alert_created',
+            payload=response_data
         )
 
         return Response(response_data, status=status.HTTP_200_OK)

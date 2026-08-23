@@ -3,16 +3,18 @@ from django.db import models
 from django.conf import settings
 from hospitals.models import Hospital
 
+from pratiraksha.fields import EncryptedCharField
+
 class Patient(models.Model):
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     hospital = models.ForeignKey(Hospital, on_delete=models.CASCADE, related_name='patients')
     mrn = models.CharField(max_length=50) # hospital-scoped uniqueness enforced in save/logic
-    name = models.CharField(max_length=255)
+    name = EncryptedCharField(max_length=1000)
     dob = models.DateField()
     gender = models.CharField(max_length=50)
     blood_group = models.CharField(max_length=10)
-    contact_phone = models.CharField(max_length=50)
-    emergency_contact = models.CharField(max_length=255)
+    contact_phone = EncryptedCharField(max_length=1000)
+    emergency_contact = EncryptedCharField(max_length=1000)
     
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
@@ -125,18 +127,6 @@ class Allergy(models.Model):
     
     created_at = models.DateTimeField(auto_now_add=True)
     created_by = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.SET_NULL, null=True)
-
-class EHRAccessLog(models.Model):
-    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
-    hospital = models.ForeignKey(Hospital, on_delete=models.CASCADE)
-    patient = models.ForeignKey(Patient, on_delete=models.SET_NULL, null=True, blank=True)
-    actor = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.SET_NULL, null=True)
-    
-    action = models.CharField(max_length=255)
-    resource_type = models.CharField(max_length=100)
-    resource_id = models.CharField(max_length=255)
-    
-    timestamp = models.DateTimeField(auto_now_add=True)
 
 class DischargeSummary(models.Model):
     STATUS_CHOICES = (

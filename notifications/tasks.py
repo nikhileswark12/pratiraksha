@@ -3,6 +3,12 @@ import logging
 from django.conf import settings
 from django.core.mail import send_mail
 from twilio.rest import Client
+from exponent_server_sdk import (
+    PushClient,
+    PushMessage,
+    PushServerError,
+    PushTicketError,
+)
 from .models import Notification
 from pratiraksha.utils import log_activity
 
@@ -57,6 +63,35 @@ def dispatch_notification(notification_id):
             # Stubbed for now, or assumed handled by consumers
             notification.status = 'stubbed'
             notification.save(update_fields=['status'])
+            
+        elif notification.type == 'push':
+            try:
+                title = notification.payload.get('subject', 'Pratiraksha Alert')
+                body = notification.payload.get('message', '')
+                
+                response = PushClient().publish(
+                    PushMessage(
+                        to=notification.recipient,
+                        title=title,
+                        body=body,
+                        data=notification.payload.get('data', {})
+                    )
+                )
+                
+                response.validate_response()
+                notification.status = 'sent'
+                notification.save(update_fields=['status'])
+                
+            except PushServerError as exc:
+                logger.error(f"PushServerError while sending to {notification.recipient}: {exc.errors}")
+                notification.status = 'failed'
+                notification.error_message = str(exc.errors)
+                notification.save(update_fields=['status', 'error_message'])
+            except (PushTicketError, Exception) as exc:
+                logger.error(f"Failed to send Push to {notification.recipient}: {str(exc)}")
+                notification.status = 'failed'
+                notification.error_message = str(exc)
+                notification.save(update_fields=['status', 'error_message'])
         
         # Log to ActivityLog
         log_activity(

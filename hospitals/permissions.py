@@ -77,11 +77,24 @@ class CombinedHospitalPermission(permissions.BasePermission):
 
     def has_object_permission(self, request, view, obj):
         if request.user.role == 'operator':
-            return request.method in permissions.SAFE_METHODS
+            if request.method not in permissions.SAFE_METHODS:
+                return False
+                
+            from .models import Hospital
+            if getattr(obj, '_meta', None) and obj._meta.model == Hospital:
+                return str(obj.tenant_id) == str(request.user.tenant_id)
+            if hasattr(obj, 'hospital'):
+                return str(obj.hospital.tenant_id) == str(request.user.tenant_id)
+            return False
             
         if request.user.role == 'hospital_manager':
             if request.method in permissions.SAFE_METHODS:
-                return True
+                from .models import Hospital
+                if getattr(obj, '_meta', None) and obj._meta.model == Hospital:
+                    return str(obj.tenant_id) == str(request.user.tenant_id)
+                if hasattr(obj, 'hospital'):
+                    return str(obj.hospital.tenant_id) == str(request.user.tenant_id)
+                return False
                 
             from .models import Hospital
             if getattr(obj, '_meta', None) and obj._meta.model == Hospital:

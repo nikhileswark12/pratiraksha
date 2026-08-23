@@ -25,13 +25,14 @@ BASE_DIR = Path(__file__).resolve().parent.parent.parent
 # See https://docs.djangoproject.com/en/5.2/howto/deployment/checklist/
 
 # SECURITY WARNING: keep the secret key used in production secret!
-SECRET_KEY = 'django-insecure-$@$l#x_u61zof&5z$qx0#zxkwi-b3b4ox#a8y$m5g#o-f8=dzv'
+SECRET_KEY = os.environ.get('SECRET_KEY', 'django-insecure-$@$l#x_u61zof&5z$qx0#zxkwi-b3b4ox#a8y$m5g#o-f8=dzv')
 
 # SECURITY WARNING: don't run with debug turned on in production!
-DEBUG = True
+DEBUG = os.environ.get('DEBUG', 'True') == 'True'
 
-ALLOWED_HOSTS = []
-CORS_ALLOW_ALL_ORIGINS = True
+ALLOWED_HOSTS = os.environ.get('ALLOWED_HOSTS', 'localhost,127.0.0.1').split(',')
+CORS_ALLOW_ALL_ORIGINS = False
+CORS_ALLOWED_ORIGINS = os.environ.get('CORS_ALLOWED_ORIGINS', 'http://localhost:3000,http://127.0.0.1:3000').split(',')
 
 
 # Application definition
@@ -48,7 +49,15 @@ INSTALLED_APPS = [
     # Third party
     'corsheaders',
     'rest_framework',
+    'rest_framework.authtoken',
     'rest_framework_simplejwt',
+    'dj_rest_auth',
+    'dj_rest_auth.registration',
+    'allauth',
+    'allauth.account',
+    'allauth.socialaccount',
+    'allauth.socialaccount.providers.google',
+    'allauth.socialaccount.providers.github',
     'channels',
 
     # Local apps
@@ -62,6 +71,7 @@ INSTALLED_APPS = [
     'agents',
     'django_filters',
     'anymail',
+    'integrations',
 ]
 
 MIDDLEWARE = [
@@ -73,6 +83,7 @@ MIDDLEWARE = [
     'django.contrib.auth.middleware.AuthenticationMiddleware',
     'django.contrib.messages.middleware.MessageMiddleware',
     'django.middleware.clickjacking.XFrameOptionsMiddleware',
+    'allauth.account.middleware.AccountMiddleware',
 ]
 
 ROOT_URLCONF = 'pratiraksha.urls'
@@ -104,6 +115,14 @@ DATABASES = {
     )
 }
 
+if DATABASES['default']['ENGINE'] == 'django.db.backends.postgresql':
+    DATABASES['default']['ENGINE'] = 'dj_db_conn_pool.backends.postgresql'
+    DATABASES['default']['POOL_OPTIONS'] = {
+        'POOL_SIZE': int(os.environ.get('DB_POOL_SIZE', 5)),
+        'MAX_OVERFLOW': int(os.environ.get('DB_MAX_OVERFLOW', 3)),
+        'POOL_TIMEOUT': 5,
+    }
+
 # Redis Cache configuration
 CACHES = {
     'default': {
@@ -112,18 +131,43 @@ CACHES = {
     }
 }
 
-# REST Framework Configuration
+# REST Framework settings
 REST_FRAMEWORK = {
     'DEFAULT_AUTHENTICATION_CLASSES': (
         'rest_framework_simplejwt.authentication.JWTAuthentication',
+        'dj_rest_auth.jwt_auth.JWTCookieAuthentication',
+    ),
+    'DEFAULT_PERMISSION_CLASSES': (
+        'rest_framework.permissions.IsAuthenticated',
     ),
     'DEFAULT_THROTTLE_RATES': {
         'anon': '5/hour',
     },
     'DEFAULT_PAGINATION_CLASS': 'rest_framework.pagination.PageNumberPagination',
-    'PAGE_SIZE': 10,
+    'PAGE_SIZE': 50,
     'DEFAULT_FILTER_BACKENDS': ['django_filters.rest_framework.DjangoFilterBackend']
 }
+
+# dj-rest-auth settings
+REST_AUTH = {
+    'USE_JWT': True,
+    'JWT_AUTH_COOKIE': 'pratiraksha-auth',
+    'JWT_AUTH_REFRESH_COOKIE': 'pratiraksha-refresh-token',
+}
+
+# allauth settings
+AUTHENTICATION_BACKENDS = [
+    'django.contrib.auth.backends.ModelBackend',
+    'allauth.account.auth_backends.AuthenticationBackend',
+]
+
+SITE_ID = 1
+
+ACCOUNT_USER_MODEL_USERNAME_FIELD = None
+ACCOUNT_EMAIL_REQUIRED = True
+ACCOUNT_USERNAME_REQUIRED = False
+ACCOUNT_AUTHENTICATION_METHOD = 'email'
+SOCIALACCOUNT_ADAPTER = 'accounts.adapters.CustomSocialAccountAdapter'
 
 # SimpleJWT Configuration
 from datetime import timedelta
@@ -233,3 +277,18 @@ DEFAULT_FROM_EMAIL = os.environ.get("DEFAULT_FROM_EMAIL", "noreply@pratiraksha.t
 TWILIO_ACCOUNT_SID = os.environ.get("TWILIO_ACCOUNT_SID", "")
 TWILIO_AUTH_TOKEN = os.environ.get("TWILIO_AUTH_TOKEN", "")
 TWILIO_FROM_NUMBER = os.environ.get("TWILIO_FROM_NUMBER", "")
+
+# Sentry
+import sentry_sdk
+from sentry_sdk.integrations.django import DjangoIntegration
+from sentry_sdk.integrations.celery import CeleryIntegration
+
+sentry_sdk.init(
+    dsn=os.environ.get("SENTRY_DSN", "https://examplePublicKey@o0.ingest.sentry.io/0"),
+    integrations=[
+        DjangoIntegration(),
+        CeleryIntegration(),
+    ],
+    traces_sample_rate=1.0,
+    send_default_pii=False,
+)

@@ -51,6 +51,14 @@ class User(AbstractUser):
         blank=True,
         related_name='users'
     )
+    tenant = models.ForeignKey(
+        'hospitals.Tenant',
+        on_delete=models.CASCADE,
+        null=True,
+        blank=True,
+        related_name='users'
+    )
+    push_token = models.CharField(max_length=255, null=True, blank=True)
     
     # New fields for auth
     failed_login_attempts = models.IntegerField(default=0)

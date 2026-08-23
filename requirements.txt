@@ -446,3 +446,9 @@ pymongo
 reportlab==5.0.0
 django-anymail[sendgrid]
 twilio
+django-cors-headers
+django-cryptography
+locuste x p o n e n t _ s e r v e r _ s d k = = 2 . 2 . 0  
+ d j a n g o - a l l a u t h = = 0 . 6 1 . 1  
+ d j - r e s t - a u t h = = 5 . 0 . 2  
+ 
