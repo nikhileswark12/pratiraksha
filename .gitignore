@@ -3,17 +3,36 @@
 __pycache__/
 .env
 venv/
+venv_new/
+.pytest_cache/
 staticfiles/
 media/
 db.sqlite3
+*.sqlite3
+*.bak
 *.log
+.coverage
+htmlcov/
 
-# Node
+# Node / Frontend
 node_modules/
+dist/
+playwright-report/
+test-results/
+blob-report/
+playwright/.cache/
+screenshot.png
 
 # OS / Editor
 .DS_Store
 .vscode/
+.idea/
+Thumbs.db
+
+# Mobile
+.expo/
+*.jks
+*.mobileprovision
 
 #Others
 datasets/

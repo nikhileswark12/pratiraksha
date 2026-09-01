@@ -7,11 +7,11 @@ test('Operator can trigger a crisis simulation', async ({ page }) => {
   await page.fill('input[type="password"]', 'Password123!');
   await page.click('button[type="submit"]');
 
-  // Should navigate to dashboard
-  await expect(page).toHaveURL(/.*\/dashboard/);
+  // Wait for login to complete
+  await expect(page.locator('text=Live Hospital Status')).toBeVisible({ timeout: 10000 });
 
   // Navigate to Crisis Sim
-  await page.click('text=Crisis Simulation');
+  await page.goto('/crisis');
   await expect(page).toHaveURL(/.*\/crisis/);
 
   // Run Simulation

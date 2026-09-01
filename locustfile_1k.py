@@ -4,9 +4,14 @@ class PratirakshaUser_1K(HttpUser):
     wait_time = between(1, 3)
 
     def on_start(self):
-        # We assume 1k users hit standard read paths (dashboard, hospital view)
-        pass
-
+        response = self.client.post("/api/v1/auth/login/", json={
+            "email": "operator@example.com",
+            "password": "Password123!"
+        })
+        if response.status_code == 200:
+            token = response.json().get('access')
+            if token:
+                self.client.headers.update({"Authorization": f"Bearer {token}"})
     @task(3)
     def view_dashboard(self):
         self.client.get("/api/v1/hospitals/", name="/hospitals (Dashboard view)")

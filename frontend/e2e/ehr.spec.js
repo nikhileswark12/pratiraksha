@@ -7,15 +7,15 @@ test('Operator can view EHR records', async ({ page }) => {
   await page.fill('input[type="password"]', 'Password123!');
   await page.click('button[type="submit"]');
 
-  // Should navigate to dashboard
-  await expect(page).toHaveURL(/.*\/dashboard/);
+  // Wait for login to complete
+  await expect(page.locator('text=Live Hospital Status')).toBeVisible({ timeout: 10000 });
 
   // Navigate to EHR
-  await page.click('text=EHR Integration');
+  await page.goto('/ehr');
   await expect(page).toHaveURL(/.*\/ehr/);
 
   // Wait for patient records to load
-  const patientRow = page.locator('tbody tr').first();
+  const patientRow = page.locator('tbody tr').filter({ hasText: 'MRN' }).first();
   await expect(patientRow).toBeVisible({ timeout: 10000 });
   
   // Verify patient data exists

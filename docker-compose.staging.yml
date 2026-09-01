@@ -47,8 +47,8 @@ services:
       - CELERY_RESULT_BACKEND=redis://redis:6379/0
       - DEBUG=False
       - ALLOWED_HOSTS=*
-      - DB_POOL_SIZE=5
-      - DB_MAX_OVERFLOW=3
+      - DB_POOL_SIZE=10
+      - DB_MAX_OVERFLOW=5
     depends_on:
       db:
         condition: service_healthy
@@ -71,8 +71,8 @@ services:
       - CELERY_RESULT_BACKEND=redis://redis:6379/0
       - DEBUG=False
       - ALLOWED_HOSTS=*
-      - DB_POOL_SIZE=5
-      - DB_MAX_OVERFLOW=3
+      - DB_POOL_SIZE=10
+      - DB_MAX_OVERFLOW=5
     depends_on:
       - db
       - redis
@@ -87,8 +87,8 @@ services:
       - MONGO_URI=mongodb://mongo:27017/pratiraksha
       - CELERY_BROKER_URL=redis://redis:6379/0
       - CELERY_RESULT_BACKEND=redis://redis:6379/0
-      - DB_POOL_SIZE=2
-      - DB_MAX_OVERFLOW=1
+      - DB_POOL_SIZE=10
+      - DB_MAX_OVERFLOW=5
     depends_on:
       db:
         condition: service_healthy

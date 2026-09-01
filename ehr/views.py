@@ -33,6 +33,20 @@ def log_ehr_access(hospital_id, patient_id, actor, action, resource_type, resour
 class PatientCreateView(views.APIView):
     permission_classes = [permissions.IsAuthenticated]
 
+    def get(self, request):
+        search = request.GET.get('search', '')
+        patients = Patient.objects.all()
+        if request.user.role == 'hospital_manager':
+            patients = patients.filter(hospital=request.user.hospital)
+        elif request.user.role == 'operator' and request.user.tenant:
+            patients = patients.filter(hospital__tenant=request.user.tenant)
+            
+        if search:
+            patients = patients.filter(mrn__icontains=search)
+            
+        serializer = PatientSerializer(patients[:50], many=True)
+        return Response(serializer.data)
+
     def post(self, request):
         if request.user.role != 'hospital_manager':
             return Response({"error": "Forbidden: Only hospital managers can access EHR data."}, status=status.HTTP_403_FORBIDDEN)

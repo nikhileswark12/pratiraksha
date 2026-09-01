@@ -32,7 +32,7 @@ DEBUG = os.environ.get('DEBUG', 'True') == 'True'
 
 ALLOWED_HOSTS = os.environ.get('ALLOWED_HOSTS', 'localhost,127.0.0.1').split(',')
 CORS_ALLOW_ALL_ORIGINS = False
-CORS_ALLOWED_ORIGINS = os.environ.get('CORS_ALLOWED_ORIGINS', 'http://localhost:3000,http://127.0.0.1:3000').split(',')
+CORS_ALLOWED_ORIGINS = os.environ.get('CORS_ALLOWED_ORIGINS', 'http://localhost:3000,http://127.0.0.1:3000,http://localhost:5173,http://127.0.0.1:5173').split(',')
 
 
 # Application definition
@@ -118,8 +118,8 @@ DATABASES = {
 if DATABASES['default']['ENGINE'] == 'django.db.backends.postgresql':
     DATABASES['default']['ENGINE'] = 'dj_db_conn_pool.backends.postgresql'
     DATABASES['default']['POOL_OPTIONS'] = {
-        'POOL_SIZE': int(os.environ.get('DB_POOL_SIZE', 5)),
-        'MAX_OVERFLOW': int(os.environ.get('DB_MAX_OVERFLOW', 3)),
+        'POOL_SIZE': int(os.environ.get('DB_POOL_SIZE', 10)),
+        'MAX_OVERFLOW': int(os.environ.get('DB_MAX_OVERFLOW', 5)),
         'POOL_TIMEOUT': 5,
     }
 
@@ -290,5 +290,5 @@ sentry_sdk.init(
         CeleryIntegration(),
     ],
     traces_sample_rate=1.0,
-    send_default_pii=False,
+    send_default_pii=True,
 )

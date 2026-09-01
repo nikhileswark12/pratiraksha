@@ -9,7 +9,7 @@ class PratirakshaUser(HttpUser):
         # We assume operator or hospital manager
         response = self.client.post("/api/v1/auth/login/", json={
             "email": "operator@example.com",
-            "password": "operatorpass"
+            "password": "Password123!"
         })
         if response.status_code == 200:
             token = response.json().get('access')
