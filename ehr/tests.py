@@ -10,12 +10,17 @@ User = get_user_model()
 
 class EHRTests(TestCase):
     def setUp(self):
-        self.hospital1 = Hospital.objects.create(name="Hospital 1", total_capacity=100)
-        self.hospital2 = Hospital.objects.create(name="Hospital 2", total_capacity=100)
+        from django.core.cache import cache
+        cache.clear()
+        
+        from hospitals.models import Tenant
+        t = Tenant.objects.create(name="Test Tenant")
+        self.hospital1 = Hospital.objects.create(name="Hospital 1", total_capacity=100, tenant=t)
+        self.hospital2 = Hospital.objects.create(name="Hospital 2", total_capacity=100, tenant=t)
         
         self.manager1 = User.objects.create_user(email="manager1@test.com", password="pass", role="hospital_manager", hospital=self.hospital1)
         self.manager2 = User.objects.create_user(email="manager2@test.com", password="pass", role="hospital_manager", hospital=self.hospital2)
-        self.operator = User.objects.create_user(email="operator@test.com", password="pass", role="operator")
+        self.operator = User.objects.create_user(email="operator@test.com", password="pass", role="operator", tenant=t)
         
         self.client1 = APIClient()
         self.client1.force_authenticate(user=self.manager1)

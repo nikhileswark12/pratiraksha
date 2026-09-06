@@ -8,6 +8,8 @@ test('should show login screen and prevent invalid login', async ({ page }) => {
   await page.fill('input[type="password"]', 'WrongPass!');
   await page.click('button[type="submit"]');
 
-  // Verify error shows
-  await expect(page.locator('.text-red-600')).toBeVisible({ timeout: 5000 });
+  // Verify specific error message shows instead of just red text
+  const errorMessage = page.locator('.text-red-600, .error-message').first();
+  await expect(errorMessage).toBeVisible({ timeout: 5000 });
+  await expect(errorMessage).toContainText(/invalid|wrong|incorrect/i);
 });

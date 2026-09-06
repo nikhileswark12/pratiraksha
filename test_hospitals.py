@@ -1,75 +1,69 @@
-import os
-import django
-from django.test import Client
-
-# Setup Django environment
-os.environ.setdefault('DJANGO_SETTINGS_MODULE', 'pratiraksha.settings.dev')
-django.setup()
-
-from hospitals.models import Hospital, Department, Equipment
+import pytest
+from rest_framework.test import APIClient
 from accounts.models import User
+from hospitals.models import Hospital, Department, Equipment
 
-# Clean up previous data
-User.objects.all().delete()
-Hospital.objects.all().delete()
+@pytest.fixture
+def api_client():
+    return APIClient()
 
-# Setup test data
-h1 = Hospital.objects.create(name="Hospital 1", address="123", zip_code="111")
-h2 = Hospital.objects.create(name="Hospital 2", address="456", zip_code="222")
+@pytest.fixture
+def setup_data(db):
+    from hospitals.models import Tenant
+    t = Tenant.objects.create(name="Test Tenant")
+    h1 = Hospital.objects.create(name="Hospital 1", address="123", zip_code="111", tenant=t)
+    h2 = Hospital.objects.create(name="Hospital 2", address="456", zip_code="222", tenant=t)
+    Department.objects.create(hospital=h1, name="Cardiology")
+    op = User.objects.create_user(email="op@test.com", password="Password1!", role="operator", tenant=t)
+    hm1 = User.objects.create_user(email="hm1@test.com", password="Password1!", role="hospital_manager", hospital=h1)
+    hm2 = User.objects.create_user(email="hm2@test.com", password="Password1!", role="hospital_manager", hospital=h2)
+    return h1, h2, op, hm1, hm2
 
-d1 = Department.objects.create(hospital=h1, name="Cardiology")
-e1 = Equipment.objects.create(hospital=h1, department=d1, name="ECG", equipment_type="Monitor")
-
-op_user = User.objects.create_user(email="op@test.com", password="Password1!", name="Op", role="operator")
-hm_user1 = User.objects.create_user(email="hm1@test.com", password="Password1!", name="HM1", role="hospital_manager", hospital_id=h1.id)
-hm_user2 = User.objects.create_user(email="hm2@test.com", password="Password1!", name="HM2", role="hospital_manager", hospital_id=h2.id)
-
-# Login and get tokens
-def get_token(email):
-    c = Client()
-    resp = c.post('/api/v1/auth/login/', {"email": email, "password": "Password1!"}, content_type="application/json")
+def get_token(client, email):
+    resp = client.post('/api/v1/auth/login/', {"email": email, "password": "Password1!"}, format="json")
     return resp.json()['access']
 
-op_token = get_token("op@test.com")
-hm1_token = get_token("hm1@test.com")
-hm2_token = get_token("hm2@test.com")
+@pytest.mark.django_db
+class TestHospitals:
+    def test_operator_read_only(self, api_client, setup_data):
+        h1, h2, op, hm1, hm2 = setup_data
+        token = get_token(api_client, op.email)
+        api_client.credentials(HTTP_AUTHORIZATION=f'Bearer {token}')
+        
+        # GET
+        assert api_client.get('/api/v1/hospitals/').status_code == 200
+        assert api_client.get(f'/api/v1/hospitals/{h1.id}/').status_code == 200
+        
+        # PUT should fail
+        assert api_client.put(f'/api/v1/hospitals/{h1.id}/', {"name": "Hacked"}, format="json").status_code == 403
 
-def test_endpoint(client, method, url, token, data=None, expected_status=None):
-    headers = {"HTTP_AUTHORIZATION": f"Bearer {token}"}
-    if method == "GET":
-        resp = client.get(url, **headers)
-    elif method == "PUT":
-        resp = client.put(url, data, content_type="application/json", **headers)
-    elif method == "PATCH":
-        resp = client.patch(url, data, content_type="application/json", **headers)
-    elif method == "POST":
-        resp = client.post(url, data, content_type="application/json", **headers)
-    elif method == "DELETE":
-        resp = client.delete(url, **headers)
-    
-    status_match = "PASS" if not expected_status or resp.status_code == expected_status else f"FAIL (Got {resp.status_code})"
-    print(f"{method} {url} -> {resp.status_code} [{status_match}]")
-    return resp
+    def test_hospital_manager_scope(self, api_client, setup_data):
+        h1, h2, op, hm1, hm2 = setup_data
+        token = get_token(api_client, hm1.email)
+        api_client.credentials(HTTP_AUTHORIZATION=f'Bearer {token}')
+        
+        # GET list
+        assert api_client.get('/api/v1/hospitals/').status_code == 200
+        
+        # PATCH own hospital
+        assert api_client.patch(f'/api/v1/hospitals/{h1.id}/', {"name": "H1 Updated"}, format="json").status_code == 200
+        
+        # PATCH other hospital
+        assert api_client.patch(f'/api/v1/hospitals/{h2.id}/', {"name": "Hacked"}, format="json").status_code == 404
 
-c = Client()
+    def test_missing_methods(self, api_client, setup_data):
+        h1, h2, op, hm1, hm2 = setup_data
+        token = get_token(api_client, hm1.email)
+        api_client.credentials(HTTP_AUTHORIZATION=f'Bearer {token}')
+        
+        assert api_client.post('/api/v1/hospitals/', {"name": "New"}, format="json").status_code == 405
+        assert api_client.delete(f'/api/v1/hospitals/{h1.id}/').status_code == 405
 
-print("--- 1. Testing Operator Read-Only Access ---")
-test_endpoint(c, "GET", "/api/v1/hospitals/", op_token, expected_status=200)
-test_endpoint(c, "GET", f"/api/v1/hospitals/{h1.id}/", op_token, expected_status=200)
-test_endpoint(c, "PUT", f"/api/v1/hospitals/{h1.id}/", op_token, {"name": "Hacked"}, expected_status=403)
-
-print("\n--- 2. Testing Hospital Manager Scope ---")
-# HM1 (owns H1)
-test_endpoint(c, "GET", "/api/v1/hospitals/", hm1_token, expected_status=200) # Can read all list
-test_endpoint(c, "PATCH", f"/api/v1/hospitals/{h1.id}/", hm1_token, {"name": "H1 Updated"}, expected_status=200) # Can update own
-test_endpoint(c, "PATCH", f"/api/v1/hospitals/{h2.id}/", hm1_token, {"name": "Hacked"}, expected_status=403) # Cannot update others
-
-print("\n--- 3. Testing POST/DELETE Missing ---")
-test_endpoint(c, "POST", "/api/v1/hospitals/", hm1_token, {"name": "New"}, expected_status=405)
-test_endpoint(c, "DELETE", f"/api/v1/hospitals/{h1.id}/", hm1_token, expected_status=405)
-
-print("\n--- 4. Testing Extra Endpoints ---")
-test_endpoint(c, "GET", f"/api/v1/hospitals/{h1.id}/departments/", op_token, expected_status=200)
-test_endpoint(c, "GET", f"/api/v1/hospitals/{h1.id}/equipment/", op_token, expected_status=200)
-resp = test_endpoint(c, "GET", f"/api/v1/hospitals/{h1.id}/occupancy-trend/", op_token, expected_status=200)
-print(f"Occupancy Output: {resp.json()}")
+    def test_extra_endpoints(self, api_client, setup_data):
+        h1, h2, op, hm1, hm2 = setup_data
+        token = get_token(api_client, op.email)
+        api_client.credentials(HTTP_AUTHORIZATION=f'Bearer {token}')
+        
+        assert api_client.get(f'/api/v1/hospitals/{h1.id}/departments/').status_code == 200
+        assert api_client.get(f'/api/v1/hospitals/{h1.id}/equipment/').status_code == 200
+        assert api_client.get(f'/api/v1/hospitals/{h1.id}/occupancy-trend/').status_code == 200

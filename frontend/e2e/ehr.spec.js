@@ -15,9 +15,9 @@ test('Operator can view EHR records', async ({ page }) => {
   await expect(page).toHaveURL(/.*\/ehr/);
 
   // Wait for patient records to load
-  const patientRow = page.locator('tbody tr').filter({ hasText: 'MRN' }).first();
+  const patientRow = page.locator('tbody tr').first();
   await expect(patientRow).toBeVisible({ timeout: 10000 });
   
-  // Verify patient data exists
-  await expect(patientRow).toContainText('MRN');
+  // Verify patient data exists with proper format (e.g. MRN0, MRN10)
+  await expect(patientRow).toContainText(/MRN\d+/);
 });

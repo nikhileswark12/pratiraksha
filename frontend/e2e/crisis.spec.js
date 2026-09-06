@@ -17,7 +17,8 @@ test('Operator can trigger a crisis simulation', async ({ page }) => {
   // Run Simulation
   await page.click('text=Run Simulation');
   
-  // Verify alert pops up or result renders
-  const resultCard = page.locator('.crisis-result-card, .alert, .text-red-600').first();
+  // Verify result renders with actual metrics instead of just generic error color
+  const resultCard = page.locator('.crisis-result-card, .alert').first();
   await expect(resultCard).toBeVisible({ timeout: 10000 });
+  await expect(resultCard).toContainText(/Risk Level|Surge/i);
 });

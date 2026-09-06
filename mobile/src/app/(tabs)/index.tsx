@@ -1,32 +1,48 @@
 import { StyleSheet, Text, View, ActivityIndicator } from 'react-native';
 import { useState, useEffect } from 'react';
+import * as SecureStore from 'expo-secure-store';
+import { router } from 'expo-router';
 
 export default function DashboardScreen() {
   const [data, setData] = useState(null);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    // Fetch real data from the API
-    fetch('http://localhost:8000/api/v1/analytics/overview/', {
-      headers: {
-        'Accept': 'application/json',
-        // In a real app, Authorization token would be injected here
-      }
-    })
-      .then(response => {
+    const fetchData = async () => {
+      try {
+        const token = await SecureStore.getItemAsync('userToken');
+        if (!token) {
+          router.replace('/login');
+          return;
+        }
+
+        const response = await fetch('http://localhost:8000/api/v1/analytics/overview/', {
+          headers: {
+            'Accept': 'application/json',
+            'Authorization': `Bearer ${token}`
+          }
+        });
+
+        if (response.status === 401 || response.status === 403) {
+          await SecureStore.deleteItemAsync('userToken');
+          router.replace('/login');
+          return;
+        }
+
         if (!response.ok) {
           throw new Error('Network response was not ok');
         }
-        return response.json();
-      })
-      .then(json => {
+
+        const json = await response.json();
         setData(json);
-        setLoading(false);
-      })
-      .catch(error => {
+      } catch (error) {
         console.error("Failed to fetch dashboard data:", error);
+      } finally {
         setLoading(false);
-      });
+      }
+    };
+
+    fetchData();
   }, []);
 
   if (loading) {

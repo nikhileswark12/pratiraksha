@@ -55,7 +55,9 @@ class PredictionViewSet(viewsets.ViewSet):
                     "date": target_date
                 }
                 
-                resp = requests.post("http://127.0.0.1:8001/predict", json=ml_payload, timeout=5)
+                import os
+                ml_url = os.environ.get("ML_SERVICE_URL", "http://ml_service:8001/predict")
+                resp = requests.post(ml_url, json=ml_payload, timeout=5)
                 resp.raise_for_status()
                 ml_data = resp.json()
                 

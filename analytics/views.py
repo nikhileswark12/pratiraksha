@@ -216,15 +216,13 @@ class AnalyticsCompareView(views.APIView):
             else:
                 pred_counts = {}
                 
-            rng = random.Random(hospital_id_str)
+            # We currently do not track historical occupancy per hospital. 
+            # We return the flat current occupancy_percent instead of fabricating data.
             for period in periods:
-                variation = rng.uniform(-5, 5)
-                simulated_occupancy = max(0, min(100, occupancy_percent + variation))
-                
                 series.append({
                     "period": period,
                     "prediction_count": pred_counts.get(period, 0),
-                    "occupancy": round(simulated_occupancy, 2)
+                    "occupancy": occupancy_percent
                 })
                 
             results.append({
