@@ -23,7 +23,7 @@ class CrisisSimulationView(views.APIView):
             if not user.hospital_id:
                 return Response({"error": "Manager has no assigned hospital."}, status=status.HTTP_400_BAD_REQUEST)
             if requested_hospital_ids and any(hid != str(user.hospital_id) for hid in requested_hospital_ids):
-                return Response({"error": "Unauthorized to simulate for other hospitals."}, status=status.HTTP_403_FORBIDDEN)
+                return Response({"error": "One or more requested hospitals not found."}, status=status.HTTP_404_NOT_FOUND)
             affected_hospitals = [str(user.hospital_id)]
         elif user.role == 'operator':
             if requested_hospital_ids:

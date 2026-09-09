@@ -272,21 +272,30 @@ class DischargeSummaryStatusView(views.APIView):
 
 from django.utils.decorators import method_decorator
 from django.views.decorators.cache import cache_page
-from django.views.decorators.vary import vary_on_headers
+from django.views.decorators.vary import vary_on_headers, vary_on_cookie
 
 class CapacityFeedView(views.APIView):
     permission_classes = [permissions.IsAuthenticated]
 
-    @method_decorator(cache_page(60))
-    @method_decorator(vary_on_headers('Authorization'))
     def get(self, request):
+        from django.core.cache import cache
+        
         if request.user.role == 'hospital_manager':
             if not request.user.hospital:
                 return Response({"error": "Forbidden: Hospital manager has no assigned hospital."}, status=status.HTTP_403_FORBIDDEN)
-            hospitals = Hospital.objects.filter(id=request.user.hospital.id)
+            cache_key = f"capacity_feed_hm_{request.user.hospital.id}"
         else:
             if not request.user.tenant:
                 return Response({"error": "Forbidden: Operator has no assigned tenant."}, status=status.HTTP_403_FORBIDDEN)
+            cache_key = f"capacity_feed_op_{request.user.tenant.id}"
+            
+        cached_data = cache.get(cache_key)
+        if cached_data:
+            return Response(cached_data)
+            
+        if request.user.role == 'hospital_manager':
+            hospitals = Hospital.objects.filter(id=request.user.hospital.id)
+        else:
             hospitals = Hospital.objects.filter(tenant=request.user.tenant)
             
         hospitals = hospitals.annotate(
@@ -313,6 +322,7 @@ class CapacityFeedView(views.APIView):
         else:
             log_ehr_access("network", None, request.user, "read_capacity_feed", "Encounter", "aggregate", fields_accessed=["status", "encounter_type"])
             
-        return Response({
-            "aggregate_metrics": feed_data
-        })
+        response_data = {"aggregate_metrics": feed_data}
+        cache.set(cache_key, response_data, 60)
+        
+        return Response(response_data)

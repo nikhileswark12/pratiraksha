@@ -10,9 +10,6 @@ User = get_user_model()
 
 class EHRTests(TestCase):
     def setUp(self):
-        from django.core.cache import cache
-        cache.clear()
-        
         from hospitals.models import Tenant
         t = Tenant.objects.create(name="Test Tenant")
         self.hospital1 = Hospital.objects.create(name="Hospital 1", total_capacity=100, tenant=t)

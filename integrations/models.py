@@ -19,3 +19,4 @@ class WebhookEndpoint(models.Model):
     
     def __str__(self):
         return f"{self.url} (Active: {self.is_active})"
+        
