@@ -33,7 +33,7 @@ export default function AnalyticsDashboard({ token }) {
       setReportStatus('queued');
       setReportError(null);
       setReportUrl(null);
-      const res = await fetch('http://localhost:8000/api/v1/analytics/report/', {
+      const res = await fetch('/api/v1/analytics/report/', {
         method: 'POST',
         headers: {
           'Authorization': `Bearer ${token}`,
@@ -62,7 +62,7 @@ export default function AnalyticsDashboard({ token }) {
     if (reportId && (reportStatus === 'queued' || reportStatus === 'processing')) {
       intervalId = setInterval(async () => {
         try {
-          const res = await fetch(`http://localhost:8000/api/v1/analytics/report/${reportId}/`, {
+          const res = await fetch(`/api/v1/analytics/report/${reportId}/`, {
             headers: { 'Authorization': `Bearer ${token}` }
           });
           const data = await res.json();
@@ -93,13 +93,13 @@ export default function AnalyticsDashboard({ token }) {
       setLoading(true);
       try {
         const [overviewRes, trendsRes, hospRes] = await Promise.all([
-          fetch('http://localhost:8000/api/v1/analytics/overview/', {
+          fetch('/api/v1/analytics/overview/', {
             headers: { 'Authorization': `Bearer ${token}` }
           }),
-          fetch(`http://localhost:8000/api/v1/analytics/trends/?metric=prediction-count&groupBy=${groupBy}`, {
+          fetch(`/api/v1/analytics/trends/?metric=prediction-count&groupBy=${groupBy}`, {
             headers: { 'Authorization': `Bearer ${token}` }
           }),
-          fetch('http://localhost:8000/api/v1/hospitals/', {
+          fetch('/api/v1/hospitals/', {
             headers: { 'Authorization': `Bearer ${token}` }
           })
         ]);
@@ -135,7 +135,7 @@ export default function AnalyticsDashboard({ token }) {
         return;
       }
       try {
-        const res = await fetch(`http://localhost:8000/api/v1/analytics/compare/?groupBy=${groupBy}&hospital_ids=${selectedHospitals.join(',')}`, {
+        const res = await fetch(`/api/v1/analytics/compare/?groupBy=${groupBy}&hospital_ids=${selectedHospitals.join(',')}`, {
           headers: { 'Authorization': `Bearer ${token}` }
         });
         if (res.ok) {

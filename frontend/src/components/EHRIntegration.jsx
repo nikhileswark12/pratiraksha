@@ -7,7 +7,7 @@ export default function EHRIntegration({ token }) {
   useEffect(() => {
     const fetchPatients = async () => {
       try {
-        const res = await fetch('http://localhost:8000/api/v1/ehr/patients/', {
+        const res = await fetch('/api/v1/ehr/patients/', {
           headers: { 'Authorization': `Bearer ${token}` }
         });
         if (res.ok) {

@@ -178,7 +178,7 @@ from datetime import timedelta
 SIMPLE_JWT = {
     'ACCESS_TOKEN_LIFETIME': timedelta(days=7),
     'REFRESH_TOKEN_LIFETIME': timedelta(days=30),
-    'ROTATE_REFRESH_TOKENS': False,
+    'ROTATE_REFRESH_TOKENS': True,
     'BLACKLIST_AFTER_ROTATION': False,
     'UPDATE_LAST_LOGIN': True,
     'ALGORITHM': 'HS256',
@@ -288,7 +288,7 @@ from sentry_sdk.integrations.django import DjangoIntegration
 from sentry_sdk.integrations.celery import CeleryIntegration
 
 sentry_sdk.init(
-    dsn=os.environ.get("SENTRY_DSN", "https://examplePublicKey@o0.ingest.sentry.io/0"),
+    dsn=os.environ.get("SENTRY_DSN", ""),
     integrations=[
         DjangoIntegration(),
         CeleryIntegration(),

@@ -22,7 +22,7 @@ export default function HospitalDetail({ token }) {
   const [error, setError] = useState(null);
   const [activeTab, setActiveTab] = useState('overview');
   const [showUpdateModal, setShowUpdateModal] = useState(false);
-  const [newCapacity, setNewCapacity] = useState('');
+  const [formData, setFormData] = useState({});
   const [updateError, setUpdateError] = useState('');
 
   useEffect(() => {
@@ -33,7 +33,7 @@ export default function HospitalDetail({ token }) {
         const headers = { 'Authorization': `Bearer ${token}` };
         
         // Fetch hospital detail
-        const hRes = await fetch(`http://localhost:8000/api/v1/hospitals/${id}/`, { headers });
+        const hRes = await fetch(`/api/v1/hospitals/${id}/`, { headers });
         if (!hRes.ok) {
           if (hRes.status === 403 || hRes.status === 404) {
              throw new Error('You do not have permission to view this hospital or it does not exist.');
@@ -45,9 +45,9 @@ export default function HospitalDetail({ token }) {
 
         // Fetch sub-resources in parallel
         const [dRes, eRes, tRes] = await Promise.all([
-          fetch(`http://localhost:8000/api/v1/hospitals/${id}/departments/`, { headers }),
-          fetch(`http://localhost:8000/api/v1/hospitals/${id}/equipment/`, { headers }),
-          fetch(`http://localhost:8000/api/v1/hospitals/${id}/occupancy-trend/`, { headers })
+          fetch(`/api/v1/hospitals/${id}/departments/`, { headers }),
+          fetch(`/api/v1/hospitals/${id}/equipment/`, { headers }),
+          fetch(`/api/v1/hospitals/${id}/occupancy-trend/`, { headers })
         ]);
 
         if (dRes.ok) setDepartments(await dRes.json());
@@ -67,25 +67,39 @@ export default function HospitalDetail({ token }) {
     fetchData();
   }, [id, token]);
 
-  const handleUpdateCapacity = async (e) => {
+  const handleUpdateHospital = async (e) => {
     e.preventDefault();
     setUpdateError('');
     try {
-      const res = await fetch(`http://localhost:8000/api/v1/hospitals/${id}/`, {
+      const res = await fetch(`/api/v1/hospitals/${id}/`, {
         method: 'PATCH',
         headers: {
           'Authorization': `Bearer ${token}`,
           'Content-Type': 'application/json'
         },
-        body: JSON.stringify({ current_occupancy: parseInt(newCapacity, 10) })
+        body: JSON.stringify(formData)
       });
-      if (!res.ok) throw new Error('Failed to update capacity');
+      if (!res.ok) throw new Error('Failed to update hospital');
       const updated = await res.json();
       setHospital(updated);
       setShowUpdateModal(false);
     } catch (err) {
       setUpdateError(err.message);
     }
+  };
+
+  const openEditModal = () => {
+    setFormData({
+        name: hospital.name || '',
+        address: hospital.address || '',
+        zip_code: hospital.zip_code || '',
+        contact_number: hospital.contact_number || '',
+        email: hospital.email || '',
+        status: hospital.status || 'NORMAL',
+        total_capacity: hospital.total_capacity || 0,
+        current_occupancy: hospital.current_occupancy || 0
+    });
+    setShowUpdateModal(true);
   };
 
   if (loading) {
@@ -142,7 +156,7 @@ export default function HospitalDetail({ token }) {
               {hospital.contact_number || 'No contact provided'}
             </div>
             <div className="mt-4">
-              <button onClick={() => { setNewCapacity(hospital.current_occupancy); setShowUpdateModal(true); }} className="bg-blue-600 text-white px-4 py-2 rounded-lg text-sm font-medium hover:bg-blue-700">Update Capacity</button>
+              <button onClick={openEditModal} className="bg-blue-600 text-white px-4 py-2 rounded-lg text-sm font-medium hover:bg-blue-700">Edit Details</button>
             </div>
           </div>
         </div>
@@ -307,20 +321,54 @@ export default function HospitalDetail({ token }) {
         )}
       </div>
 
-      {/* Update Capacity Modal */}
+      {/* Update Hospital Modal */}
       {showUpdateModal && (
-        <div className="fixed inset-0 bg-slate-900/50 flex items-center justify-center p-4 z-50">
-          <div className="bg-white rounded-xl shadow-xl max-w-md w-full p-6">
-            <h2 className="text-xl font-bold mb-4">Update Capacity</h2>
+        <div className="fixed inset-0 bg-slate-900/50 flex items-center justify-center p-4 z-50 overflow-y-auto">
+          <div className="bg-white rounded-xl shadow-xl max-w-2xl w-full p-6 my-8">
+            <h2 className="text-xl font-bold mb-4">Edit Hospital Details</h2>
             {updateError && <div className="bg-red-50 text-red-600 p-3 rounded mb-4 text-sm">{updateError}</div>}
-            <form onSubmit={handleUpdateCapacity}>
-              <div className="mb-4">
-                <label className="block text-sm font-medium text-slate-700 mb-1">Current Occupancy</label>
-                <input type="number" value={newCapacity} onChange={e => setNewCapacity(e.target.value)} className="w-full border-slate-300 rounded-lg p-2 border" required min="0" max={hospital.total_capacity} />
+            <form onSubmit={handleUpdateHospital}>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
+                <div>
+                  <label className="block text-sm font-medium text-slate-700 mb-1">Name</label>
+                  <input type="text" value={formData.name} onChange={e => setFormData({...formData, name: e.target.value})} className="w-full border-slate-300 rounded-lg p-2 border" required />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-slate-700 mb-1">Status</label>
+                  <select value={formData.status} onChange={e => setFormData({...formData, status: e.target.value})} className="w-full border-slate-300 rounded-lg p-2 border" required>
+                    <option value="NORMAL">Normal</option>
+                    <option value="MODERATE">Moderate</option>
+                    <option value="CRITICAL">Critical</option>
+                  </select>
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-slate-700 mb-1">Total Capacity</label>
+                  <input type="number" value={formData.total_capacity} onChange={e => setFormData({...formData, total_capacity: e.target.value})} className="w-full border-slate-300 rounded-lg p-2 border" required min="0" />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-slate-700 mb-1">Current Occupancy</label>
+                  <input type="number" value={formData.current_occupancy} onChange={e => setFormData({...formData, current_occupancy: e.target.value})} className="w-full border-slate-300 rounded-lg p-2 border" required min="0" max={formData.total_capacity} />
+                </div>
+                <div className="md:col-span-2">
+                  <label className="block text-sm font-medium text-slate-700 mb-1">Address</label>
+                  <input type="text" value={formData.address} onChange={e => setFormData({...formData, address: e.target.value})} className="w-full border-slate-300 rounded-lg p-2 border" required />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-slate-700 mb-1">Zip Code</label>
+                  <input type="text" value={formData.zip_code} onChange={e => setFormData({...formData, zip_code: e.target.value})} className="w-full border-slate-300 rounded-lg p-2 border" required />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-slate-700 mb-1">Contact Number</label>
+                  <input type="text" value={formData.contact_number} onChange={e => setFormData({...formData, contact_number: e.target.value})} className="w-full border-slate-300 rounded-lg p-2 border" />
+                </div>
+                <div className="md:col-span-2">
+                  <label className="block text-sm font-medium text-slate-700 mb-1">Email</label>
+                  <input type="email" value={formData.email} onChange={e => setFormData({...formData, email: e.target.value})} className="w-full border-slate-300 rounded-lg p-2 border" />
+                </div>
               </div>
               <div className="flex justify-end gap-3">
                 <button type="button" onClick={() => setShowUpdateModal(false)} className="px-4 py-2 text-sm font-medium text-slate-700 hover:bg-slate-100 rounded-lg">Cancel</button>
-                <button type="submit" className="px-4 py-2 text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 rounded-lg">Save</button>
+                <button type="submit" className="px-4 py-2 text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 rounded-lg">Save Changes</button>
               </div>
             </form>
           </div>

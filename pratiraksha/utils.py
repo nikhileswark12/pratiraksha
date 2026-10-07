@@ -8,6 +8,17 @@ logger = logging.getLogger(__name__)
 _mongo_client = None
 _db = None
 
+import pymongo
+
+def ensure_mongo_indexes(db):
+    try:
+        db.activity_logs.create_index(
+            [("timestamp", pymongo.ASCENDING)],
+            expireAfterSeconds=7776000
+        )
+    except Exception as e:
+        logger.error(f"Failed to create MongoDB indexes: {e}")
+
 def get_mongo_db():
     global _mongo_client, _db
     if _db is not None:
@@ -16,11 +27,13 @@ def get_mongo_db():
     try:
         _mongo_client = MongoClient(settings.MONGO_URI, serverSelectionTimeoutMS=5000)
         _db = _mongo_client.get_default_database()
+        ensure_mongo_indexes(_db)
     except Exception:
         try:
             _mongo_client = MongoClient(settings.MONGO_URI, serverSelectionTimeoutMS=5000)
             db_name = settings.MONGO_URI.split('/')[-1].split('?')[0] or 'pratiraksha'
             _db = _mongo_client[db_name]
+            ensure_mongo_indexes(_db)
         except Exception as e:
             logger.error(f"Failed to connect to MongoDB: {e}")
             _mongo_client = None
@@ -48,7 +61,7 @@ def log_activity(actor, action, resource_type=None, resource_id=None, extra_data
         doc["extra_data"] = extra_data
         
     try:
-        db.activity_log.insert_one(doc)
+        db.activity_logs.insert_one(doc)
         return True
     except Exception as e:
         logger.error(f"Failed to log activity to MongoDB: {e}")

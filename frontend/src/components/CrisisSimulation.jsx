@@ -7,7 +7,7 @@ export default function CrisisSimulation({ token }) {
   const runSimulation = async () => {
     setLoading(true);
     try {
-      const res = await fetch('http://localhost:8000/api/v1/crisis/simulate/', {
+      const res = await fetch('/api/v1/crisis/simulate/', {
         method: 'POST',
         headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' },
         body: JSON.stringify({ scenario: 'mass_gathering', parameters: { event_size: 5000, duration: 6 } })

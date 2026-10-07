@@ -1,62 +1,48 @@
-from django.db.models.signals import post_save
+from django.db.models.signals import post_save, pre_save
 from django.dispatch import receiver
-from channels.layers import get_channel_layer
-from asgiref.sync import async_to_sync
 from .models import Hospital
-from notifications.models import Notification
-from notifications.tasks import dispatch_notification
 from pratiraksha.utils import log_activity
+from notifications.tasks import process_status_change_notification, broadcast_hospital_update, broadcast_hospital_critical
+
+@receiver(pre_save, sender=Hospital)
+def hospital_pre_save(sender, instance, **kwargs):
+    if instance.pk:
+        try:
+            old_instance = Hospital.objects.get(pk=instance.pk)
+            instance._original_status = old_instance.status
+        except Hospital.DoesNotExist:
+            instance._original_status = None
+    else:
+        instance._original_status = None
 
 @receiver(post_save, sender=Hospital)
 def hospital_post_save(sender, instance, created, update_fields, **kwargs):
-    channel_layer = get_channel_layer()
-    
-    # In a real app we'd track original values to see what actually changed.
-    # For now, we assume if it saved, it might have changed.
     changes = {
         "status": instance.status,
         "total_capacity": instance.total_capacity,
         "current_occupancy": instance.current_occupancy
     }
 
-    # Group for operators
-    global_group = 'hospital_updates'
-    # Group for managers of this specific hospital
-    manager_group = f'hospital_updates_{instance.id}'
+    # Asynchronous broadcast of hospital updates
+    broadcast_hospital_update.delay(str(instance.id), changes, instance.status, str(instance.tenant_id))
 
-    # Emit hospital.updated
-    update_event = {
-        'type': 'hospital.updated',
-        'hospital_id': str(instance.id),
-        'changes': changes,
-        'new_status': instance.status
-    }
-    async_to_sync(channel_layer.group_send)(global_group, update_event)
-    async_to_sync(channel_layer.group_send)(manager_group, update_event)
+    old_status = getattr(instance, '_original_status', None)
 
-    # Emit hospital.critical if status is CRITICAL
     if instance.status == 'CRITICAL':
-        critical_event = {
-            'type': 'hospital.critical',
-            'hospital_id': str(instance.id),
-            'hospital_name': instance.name,
-            'occupancy': instance.current_occupancy
-        }
-        async_to_sync(channel_layer.group_send)(global_group, critical_event)
-        async_to_sync(channel_layer.group_send)(manager_group, critical_event)
-        
-        # Enqueue Notification
-        notif = Notification.objects.create(
-            type='email',
-            recipient='system_admin@test.com',
-            hospital_id=instance.id,
-            trigger_event='hospital_critical',
-            payload={
-                "hospital_name": instance.name,
-                "occupancy": instance.current_occupancy
-            }
+        # Asynchronous broadcast of hospital critical event
+        broadcast_hospital_critical.delay(str(instance.id), instance.name, instance.current_occupancy, str(instance.tenant_id))
+
+    # Process status change notification asynchronously
+    if old_status != instance.status:
+        process_status_change_notification.delay(
+            str(instance.id),
+            old_status,
+            instance.status,
+            instance.name,
+            instance.current_occupancy,
+            instance.total_capacity,
+            str(instance.tenant_id)
         )
-        dispatch_notification.delay(notif.id)
 
     # Log to ActivityLog
     log_activity(

@@ -66,7 +66,7 @@ class Command(BaseCommand):
         if db is not None:
             # Clear existing
             db.predictions.delete_many({})
-            db.activity_log.delete_many({})
+            db.activity_logs.delete_many({})
             
             predictions = []
             for i in range(100):

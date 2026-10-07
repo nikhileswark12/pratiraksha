@@ -4,5 +4,6 @@ from .base import *
 DEBUG = True
 ALLOWED_HOSTS = ['*']
 
-# Optional: Load DATABASE_URL from .env here if you're using python-dotenv,
-# but for now default sqlite3 is in base.py and can be overridden.
+import sys
+if 'pytest' in sys.argv[0] or 'test' in sys.argv:
+    CELERY_TASK_ALWAYS_EAGER = True

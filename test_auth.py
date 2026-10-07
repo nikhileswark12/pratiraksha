@@ -89,8 +89,10 @@ class TestAuth:
         assert resp.status_code == 200
         
         api_client.credentials() # clear headers
+        api_client.cookies['pratiraksha-refresh-token'] = refresh_token
         resp = api_client.post('/api/v1/auth/refresh/', {
             "refresh": refresh_token
         }, format='json')
+        print("Refresh Error:", resp.json() if resp.status_code != 200 else "OK")
         assert resp.status_code == 200
         assert 'access' in resp.json()

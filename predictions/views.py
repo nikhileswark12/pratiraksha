@@ -42,21 +42,24 @@ class PredictionViewSet(viewsets.ViewSet):
                 prev_day_admissions = float(total_occupancy * 0.05)
                 weekly_avg_admissions = float(total_occupancy * 0.05)
                 
+                dt_obj = datetime.datetime.fromisoformat(target_date.replace("Z", ""))
+                day_of_week = dt_obj.weekday()
+                month = dt_obj.month
+                
                 # Try ML Service first
                 ml_payload = {
                     "event": event,
                     "pollution_level": pollution_level,
                     "temperature": temperature,
                     "humidity": humidity,
-                    "rainfall": rainfall,
-                    "prev_day_admissions": prev_day_admissions,
-                    "weekly_avg_admissions": weekly_avg_admissions,
+                    "date": target_date,
                     "city": city,
-                    "date": target_date
+                    "day_of_week": day_of_week,
+                    "month": month
                 }
                 
                 import os
-                ml_url = os.environ.get("ML_SERVICE_URL", "http://ml_service:8001/predict")
+                ml_url = os.environ.get("ML_SERVICE_URL", "http://localhost:8001/predict")
                 resp = requests.post(ml_url, json=ml_payload, timeout=5)
                 resp.raise_for_status()
                 ml_data = resp.json()
@@ -64,14 +67,14 @@ class PredictionViewSet(viewsets.ViewSet):
                 response_data = {
                     "id": prediction_id,
                     "risk_level": ml_data["risk_level"],
-                    "risk_score": ml_data["risk_score"],
+                    "risk_score": ml_data["predicted_surge"], # Using predicted_surge as proxy for risk_score
                     "predicted_surge": ml_data["predicted_surge"],
                     "confidence": ml_data.get("confidence", 85.0),
-                    "affected_departments": ml_data.get("affected_departments", ["ER"]),
-                    "recommended_actions": ml_data.get("recommended_actions", []),
-                    "resource_requirements": ml_data.get("resource_requirements", {}),
-                    "timeline": ml_data.get("timeline", target_date),
-                    "model_version": ml_data.get("model_version", "surge-predictor-v1-733rows")
+                    "affected_departments": ["ER"],
+                    "recommended_actions": ["Alert on-call staff" if ml_data["risk_level"] == "HIGH" else "Monitor situation"],
+                    "resource_requirements": {"beds": int(ml_data["predicted_surge"]/10)+5},
+                    "timeline": target_date,
+                    "model_version": ml_data.get("model_version", "1.0.0")
                 }
             except Exception as e:
                 print(f"ML Service failed or hospital invalid: {e}. Falling back to heuristic.")

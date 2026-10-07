@@ -47,9 +47,12 @@ async def test_ws_authentication():
     # 4. Trigger H1 critical update via API
     @sync_to_async
     def trigger_h1_critical():
+        from django.conf import settings
+        settings.CELERY_TASK_ALWAYS_EAGER = True
         c = APIClient()
         c.credentials(HTTP_AUTHORIZATION=f'Bearer {hm1_token}')
         resp = c.patch(f'/api/v1/hospitals/{h1.id}/', {"status": "CRITICAL", "current_occupancy": 95}, format="json")
+        settings.CELERY_TASK_ALWAYS_EAGER = False
         return resp.status_code
 
     status_code = await trigger_h1_critical()

@@ -47,7 +47,7 @@ export default function PratirakshaDashboard({ token, onLogout, onUserLoaded }) 
     // 1. Fetch User Data
     const fetchUser = async () => {
       try {
-        const res = await fetch('http://localhost:8000/api/v1/auth/me/', {
+        const res = await fetch('/api/v1/auth/me/', {
           headers: { 'Authorization': `Bearer ${token}` }
         });
         if (res.ok) {
@@ -65,7 +65,7 @@ export default function PratirakshaDashboard({ token, onLogout, onUserLoaded }) 
     // 2. Fetch Hospitals
     const fetchHospitals = async () => {
       try {
-        const res = await fetch('http://localhost:8000/api/v1/hospitals/', {
+        const res = await fetch('/api/v1/hospitals/', {
           headers: { 'Authorization': `Bearer ${token}` }
         });
         if (res.ok) {
@@ -87,7 +87,8 @@ export default function PratirakshaDashboard({ token, onLogout, onUserLoaded }) 
   useEffect(() => {
     let reconnectTimeout;
     const connectWs = () => {
-      ws.current = new WebSocket(`ws://localhost:8000/ws/hospitals/?token=${token}`);
+      const wsProtocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+      ws.current = new WebSocket(`${wsProtocol}//${window.location.host}/ws/hospitals/?token=${token}`);
 
       ws.current.onopen = () => {
         setIsConnected(true);

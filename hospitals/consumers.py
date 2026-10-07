@@ -11,7 +11,7 @@ class HospitalConsumer(AsyncWebsocketConsumer):
 
         # Determine grouping based on role
         if self.user.role == 'operator':
-            self.group_name = 'hospital_updates'
+            self.group_name = f'hospital_updates_tenant_{self.user.tenant_id}'
         elif self.user.role == 'hospital_manager':
             self.group_name = f'hospital_updates_{self.user.hospital_id}'
         else:
@@ -72,5 +72,13 @@ class HospitalConsumer(AsyncWebsocketConsumer):
         pass
 
     async def notification_new(self, event):
-        # Stubbed for Day 25+
-        pass
+        """
+        Handler for the 'notification.new' event type.
+        """
+        await self.send(text_data=json.dumps({
+            'type': 'notification.new',
+            'notification_id': str(event.get('notification_id')),
+            'severity': event.get('severity'),
+            'title': event.get('title'),
+            'message': event.get('message')
+        }))

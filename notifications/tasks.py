@@ -114,3 +114,153 @@ def dispatch_notification(notification_id):
     except Exception as e:
         logger.error(f"Failed to dispatch notification {notification_id}: {e}")
         return False
+
+@shared_task
+def process_status_change_notification(hospital_id, old_status, new_status, hospital_name, current_occupancy, total_capacity, tenant_id):
+    from channels.layers import get_channel_layer
+    from asgiref.sync import async_to_sync
+    from notifications.models import Notification, InAppNotification
+    
+    channel_layer = get_channel_layer()
+    tenant_group = f'hospital_updates_tenant_{tenant_id}'
+    manager_group = f'hospital_updates_{hospital_id}'
+
+    # In-App Notifications for status changes
+    if old_status != new_status:
+        in_app_notif = None
+        if new_status == 'CRITICAL':
+            in_app_notif = InAppNotification.objects.create(
+                hospital_id=hospital_id,
+                severity='CRITICAL',
+                title='Capacity Critical',
+                message=f"{hospital_name} is now CRITICAL ({current_occupancy}/{total_capacity} beds)."
+            )
+            # Create SMS/Email Notification for admins
+            notif = Notification.objects.create(
+                type='email',
+                recipient='system_admin@test.com',
+                hospital_id=hospital_id,
+                trigger_event='hospital_critical',
+                payload={
+                    "hospital_name": hospital_name,
+                    "occupancy": current_occupancy
+                }
+            )
+            dispatch_notification.delay(notif.id)
+            
+            # Create SMS Notification
+            sms_notif = Notification.objects.create(
+                type='sms',
+                recipient='+1234567890', # Stub for emergency contacts
+                hospital_id=hospital_id,
+                trigger_event='hospital_critical',
+                payload={
+                    "message": f"CRITICAL: {hospital_name} occupancy is {current_occupancy}."
+                }
+            )
+            dispatch_notification.delay(sms_notif.id)
+            
+        elif new_status == 'MODERATE' and old_status == 'NORMAL':
+            in_app_notif = InAppNotification.objects.create(
+                hospital_id=hospital_id,
+                severity='WARNING',
+                title='Capacity Warning',
+                message=f"{hospital_name} is experiencing moderate surge ({current_occupancy}/{total_capacity} beds)."
+            )
+        elif new_status == 'NORMAL' and old_status in ['MODERATE', 'CRITICAL']:
+            in_app_notif = InAppNotification.objects.create(
+                hospital_id=hospital_id,
+                severity='INFO',
+                title='Capacity Normalised',
+                message=f"{hospital_name} has recovered to NORMAL capacity."
+            )
+            
+        if in_app_notif:
+            notif_event = {
+                'type': 'notification.new',
+                'notification_id': str(in_app_notif.id),
+                'severity': in_app_notif.severity,
+                'title': in_app_notif.title,
+                'message': in_app_notif.message
+            }
+            async_to_sync(channel_layer.group_send)(tenant_group, notif_event)
+            async_to_sync(channel_layer.group_send)(manager_group, notif_event)
+
+@shared_task
+def broadcast_hospital_update(hospital_id, changes, new_status, tenant_id):
+    from channels.layers import get_channel_layer
+    from asgiref.sync import async_to_sync
+    channel_layer = get_channel_layer()
+    tenant_group = f'hospital_updates_tenant_{tenant_id}'
+    manager_group = f'hospital_updates_{hospital_id}'
+    
+    update_event = {
+        'type': 'hospital.updated',
+        'hospital_id': str(hospital_id),
+        'changes': changes,
+        'new_status': new_status
+    }
+    async_to_sync(channel_layer.group_send)(tenant_group, update_event)
+    async_to_sync(channel_layer.group_send)(manager_group, update_event)
+
+@shared_task
+def broadcast_hospital_critical(hospital_id, hospital_name, occupancy, tenant_id):
+    from channels.layers import get_channel_layer
+    from asgiref.sync import async_to_sync
+    channel_layer = get_channel_layer()
+    tenant_group = f'hospital_updates_tenant_{tenant_id}'
+    manager_group = f'hospital_updates_{hospital_id}'
+    
+    critical_event = {
+        'type': 'hospital.critical',
+        'hospital_id': str(hospital_id),
+        'hospital_name': hospital_name,
+        'occupancy': occupancy
+    }
+    async_to_sync(channel_layer.group_send)(tenant_group, critical_event)
+    async_to_sync(channel_layer.group_send)(manager_group, critical_event)
+
+@shared_task
+def process_crisis_notification(affected_hospitals, scenario, estimated_patient_surge, tenant_id):
+    from channels.layers import get_channel_layer
+    from asgiref.sync import async_to_sync
+    from notifications.models import InAppNotification
+    
+    channel_layer = get_channel_layer()
+    
+    notif_msg = f"A {scenario} simulation predicts a surge of {estimated_patient_surge} patients."
+    if affected_hospitals == ["all_network"]:
+        notif = InAppNotification.objects.create(
+            tenant_id=tenant_id,
+            severity='CRITICAL',
+            title='Network-wide Crisis Simulation',
+            message=notif_msg
+        )
+        async_to_sync(channel_layer.group_send)(
+            f'hospital_updates_tenant_{tenant_id}', 
+            {
+                'type': 'notification.new',
+                'notification_id': str(notif.id),
+                'severity': notif.severity,
+                'title': notif.title,
+                'message': notif.message
+            }
+        )
+    else:
+        for hid in affected_hospitals:
+            notif = InAppNotification.objects.create(
+                hospital_id=hid,
+                severity='CRITICAL',
+                title='Hospital Crisis Simulation',
+                message=notif_msg
+            )
+            async_to_sync(channel_layer.group_send)(
+                f'hospital_updates_{hid}', 
+                {
+                    'type': 'notification.new',
+                    'notification_id': str(notif.id),
+                    'severity': notif.severity,
+                    'title': notif.title,
+                    'message': notif.message
+                }
+            )

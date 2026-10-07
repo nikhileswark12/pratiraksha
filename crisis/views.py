@@ -142,4 +142,14 @@ class CrisisSimulationView(views.APIView):
             payload=response_data
         )
 
+        # Generate In-App Notification asynchronously
+        from notifications.tasks import process_crisis_notification
+        
+        process_crisis_notification.delay(
+            affected_hospitals,
+            scenario,
+            estimated_patient_surge,
+            str(user.tenant_id)
+        )
+
         return Response(response_data, status=status.HTTP_200_OK)

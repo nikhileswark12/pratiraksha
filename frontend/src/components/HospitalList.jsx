@@ -37,7 +37,7 @@ export default function HospitalList({ token }) {
     const fetchHospitals = async () => {
       setLoading(true);
       try {
-        let url = `http://localhost:8000/api/v1/hospitals/?page=${page}`;
+        let url = `/api/v1/hospitals/?page=${page}`;
         if (search) url += `&search=${encodeURIComponent(search)}`;
         if (statusFilter) url += `&status=${encodeURIComponent(statusFilter)}`;
 

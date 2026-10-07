@@ -448,7 +448,10 @@ django-anymail[sendgrid]
 twilio
 django-cors-headers
 django-cryptography
-locuste x p o n e n t _ s e r v e r _ s d k = = 2 . 2 . 0  
- d j a n g o - a l l a u t h = = 0 . 6 1 . 1  
- d j - r e s t - a u t h = = 5 . 0 . 2  
- 
+locust
+exponent_server_sdk==2.2.0
+django-allauth==0.61.1
+dj-rest-auth==5.0.2
+channels==4.3.2
+channels-redis==4.3.0
+daphne==4.2.2

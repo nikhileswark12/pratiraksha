@@ -107,8 +107,23 @@ python manage.py runserver
 ### 5. Run the Celery Worker (In a separate terminal)
 ```bash
 venv\Scripts\activate
-celery -A pratiraksha worker -l info
+celery -A pratiraksha worker -l info --pool=solo
 ```
+
+### 6. Staging Deployment
+A production-ready staging configuration is provided via `docker-compose.staging.yml`. This includes:
+* `nginx` (Reverse Proxy for frontend and APIs)
+* `web` (Django Backend via Gunicorn)
+* `daphne` (ASGI WebSockets)
+* `ml_service` (FastAPI Prediction Engine)
+* `frontend` (React Frontend static server)
+* `db`, `mongo`, `redis`
+
+**Important Note:** To deploy the staging environment, Docker must be installed on your host system. To launch:
+```bash
+docker compose -f docker-compose.staging.yml up -d --build
+```
+*(Currently blocked: Docker is not available on the current Windows host environment.)*
 
 ---
 
