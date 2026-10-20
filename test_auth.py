@@ -32,7 +32,7 @@ class TestAuth:
         }, format='json')
         assert resp.status_code in [400, 429] 
 
-    def test_register_hm_success(self, api_client, hospital):
+    def test_public_registration_cannot_assign_hospital_manager(self, api_client, hospital):
         resp = api_client.post('/api/v1/auth/register/', {
             "name": "HM User",
             "email": "hm2@test.com",
@@ -40,7 +40,8 @@ class TestAuth:
             "role": "hospital_manager",
             "hospitalId": str(hospital.id)
         }, format='json')
-        assert resp.status_code in [201, 429]
+        assert resp.status_code in [400, 429]
+        assert not User.objects.filter(email="hm2@test.com").exists()
 
     def test_register_admin_fails(self, api_client):
         resp = api_client.post('/api/v1/auth/register/', {

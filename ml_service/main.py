@@ -6,6 +6,7 @@ import torch.nn as nn
 import pickle
 import pandas as pd
 import datetime
+from pathlib import Path
 
 app = FastAPI()
 
@@ -23,12 +24,13 @@ class SurgePredictorModel(nn.Module):
     def forward(self, x):
         return self.net(x)
 
-# Load globals
+# Load trusted model artifacts relative to this module, not the process working directory.
+MODEL_DIR = Path(__file__).resolve().parent
 try:
-    with open('scaler.pkl', 'rb') as f:
+    with open(MODEL_DIR / 'scaler.pkl', 'rb') as f:
         scaler = pickle.load(f)
     model = SurgePredictorModel(input_dim=12) # 12 features
-    model.load_state_dict(torch.load('surge_predictor_best.pth'))
+    model.load_state_dict(torch.load(MODEL_DIR / 'surge_predictor_best.pth', map_location='cpu', weights_only=True))
     model.eval()
     model_loaded = True
 except Exception as e:
@@ -44,6 +46,9 @@ class PredictionRequest(BaseModel):
     city: str = 'Unknown'
     day_of_week: int = 0
     month: int = 1
+    rainfall: float = 0.0
+    prev_day_admissions: float = 10.0
+    weekly_avg_admissions: float = 10.0
 
 @app.get('/health')
 def health():
@@ -73,10 +78,11 @@ def predict_surge(req: PredictionRequest):
         elif month in [6, 7, 8, 9]: season = 4
         else: season = 5
         
-        # Missing canonical features are filled with sensible defaults for the 12-feature scaler
-        prev_day_admissions = 10.0
-        weekly_avg_admissions = 10.0
-        rainfall = 0.0
+        # Historical admission and rainfall features are supplied by the caller when available.
+        # Defaults are explicit fallbacks, not observed measurements.
+        prev_day_admissions = req.prev_day_admissions
+        weekly_avg_admissions = req.weekly_avg_admissions
+        rainfall = req.rainfall
         
         features = [
             day, month, hour, weekend_flag, festival_flag,

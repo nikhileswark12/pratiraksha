@@ -3,6 +3,8 @@ import { useState, useEffect } from 'react';
 import * as SecureStore from 'expo-secure-store';
 import { router } from 'expo-router';
 
+const API_BASE_URL = (process.env.EXPO_PUBLIC_API_URL || 'http://localhost:8000').replace(/\/$/, '');
+
 export default function DashboardScreen() {
   const [data, setData] = useState(null);
   const [loading, setLoading] = useState(true);
@@ -16,7 +18,7 @@ export default function DashboardScreen() {
           return;
         }
 
-        const response = await fetch('http://localhost:8000/api/v1/analytics/overview/', {
+        const response = await fetch(`${API_BASE_URL}/api/v1/analytics/overview/`, {
           headers: {
             'Accept': 'application/json',
             'Authorization': `Bearer ${token}`
@@ -59,16 +61,16 @@ export default function DashboardScreen() {
       
       <View style={styles.card}>
         <Text style={styles.cardTitle}>Capacity Overview</Text>
-        <Text>Total Beds: {data.network_capacity?.total_capacity}</Text>
-        <Text>Occupied: {data.network_capacity?.current_occupancy}</Text>
-        <Text>Utilization: {data.network_capacity?.occupancy_rate}%</Text>
+        <Text>Total Beds: {data.total_beds ?? 0}</Text>
+        <Text>Occupied: {data.current_occupancy ?? 0}</Text>
+        <Text>Utilization: {data.avg_occupancy_percent ?? 0}%</Text>
       </View>
 
       <View style={styles.card}>
         <Text style={styles.cardTitle}>Status Breakdown</Text>
-        <Text>Normal: {data.status_breakdown?.NORMAL || 0}</Text>
-        <Text>Moderate: {data.status_breakdown?.MODERATE || 0}</Text>
-        <Text style={{color: 'red'}}>Critical: {data.status_breakdown?.CRITICAL || 0}</Text>
+        <Text>Normal: {data.status_summary?.NORMAL || 0}</Text>
+        <Text>Moderate: {data.status_summary?.MODERATE || 0}</Text>
+        <Text style={{color: 'red'}}>Critical: {data.status_summary?.CRITICAL || 0}</Text>
       </View>
     </View>
   );

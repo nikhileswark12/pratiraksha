@@ -35,11 +35,14 @@ class PatientCreateView(views.APIView):
 
     def get(self, request):
         search = request.GET.get('search', '')
-        patients = Patient.objects.all()
+        # Fail closed: never return the unscoped patient table for an
+        # authenticated user whose role or facility assignment is missing.
         if request.user.role == 'hospital_manager':
-            patients = patients.filter(hospital=request.user.hospital)
-        elif request.user.role == 'operator' and request.user.tenant:
-            patients = patients.filter(hospital__tenant=request.user.tenant)
+            patients = Patient.objects.filter(hospital_id=request.user.hospital_id) if request.user.hospital_id else Patient.objects.none()
+        elif request.user.role == 'operator' and request.user.tenant_id:
+            patients = Patient.objects.filter(hospital__tenant_id=request.user.tenant_id)
+        else:
+            patients = Patient.objects.none()
             
         if search:
             patients = patients.filter(mrn__icontains=search)

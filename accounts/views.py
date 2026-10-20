@@ -122,24 +122,29 @@ class LoginView(views.APIView):
 
 class CustomTokenRefreshView(TokenRefreshView):
     def post(self, request, *args, **kwargs):
+        refresh_token = request.data.get('refresh')
+        try:
+            if not refresh_token:
+                raise InvalidToken("Refresh token is required.")
+            incoming = RefreshToken(refresh_token)
+            incoming_jti = incoming.get('jti')
+            if not incoming_jti or not cache.get(f"jti_{incoming_jti}"):
+                raise InvalidToken("Token has been revoked or expired.")
+        except Exception:
+            return Response({"error": "Invalid or revoked refresh token."}, status=status.HTTP_401_UNAUTHORIZED)
+
         response = super().post(request, *args, **kwargs)
-        if response.status_code == 200:
-            # We must validate the jti of the incoming refresh token against Redis
-            refresh_token = request.data.get('refresh')
+        if response.status_code == status.HTTP_200_OK and response.data.get('refresh'):
             try:
-                token = RefreshToken(refresh_token)
-                jti = token.get('jti')
-                if not jti or not cache.get(f"jti_{jti}"):
-                    raise InvalidToken("Token has been revoked or expired.")
-                
-                # We should issue a new JTI for the newly created tokens (which SimpleJWT handles automatically for rotation, but we have ROTATE_REFRESH_TOKENS=False).
-                # Actually, simplejwt refresh view just issues a new access token if ROTATE=False.
-                # Let's customize it to include our custom claims in the new access token.
-                # SimpleJWT copies claims from the refresh token to the new access token if configured.
-                # It's cleaner to decode the new token, add claims and encode, or rely on SimpleJWT's TokenUser.
-                pass
-            except Exception as e:
-                return Response({"error": str(e)}, status=status.HTTP_401_UNAUTHORIZED)
+                rotated = RefreshToken(response.data['refresh'])
+                rotated_jti = rotated.get('jti')
+                expires_in = int(rotated['exp'] - timezone.now().timestamp())
+                if rotated_jti and expires_in > 0:
+                    cache.set(f"jti_{rotated_jti}", "valid", timeout=expires_in)
+                    # Refresh tokens are single-use once rotation succeeds.
+                    cache.delete(f"jti_{incoming_jti}")
+            except Exception:
+                return Response({"error": "Failed to register rotated refresh token."}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
         return response
 
 class MeView(generics.RetrieveAPIView):

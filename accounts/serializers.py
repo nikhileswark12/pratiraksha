@@ -23,8 +23,12 @@ class RegisterSerializer(serializers.ModelSerializer):
         return value
 
     def validate_role(self, value):
-        if value not in dict(User.ROLE_CHOICES).keys():
-            raise serializers.ValidationError("Role must be 'operator' or 'hospital_manager'.")
+        # Public self-registration must never grant hospital-scoped privileges.
+        if value != 'operator':
+            raise serializers.ValidationError(
+                "Self-registration is only available for operator accounts. "
+                "Hospital-manager accounts must be provisioned by an administrator."
+            )
         return value
 
     def validate(self, data):

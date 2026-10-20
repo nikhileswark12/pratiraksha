@@ -30,12 +30,29 @@ class PredictionViewSet(viewsets.ViewSet):
         prediction_id = str(uuid.uuid4())
         
         is_network_wide = not bool(hospital_id)
-        
+        hospital = None
+
         if is_network_wide:
-            print("Network-wide prediction requested. Bypassing ML service (single-hospital scale) and using heuristic.")
+            if request.user.role != "operator":
+                return Response({"error": "Only operators can request network-wide predictions."}, status=status.HTTP_403_FORBIDDEN)
+            if not request.user.tenant_id:
+                return Response({"error": "Operator has no assigned tenant."}, status=status.HTTP_403_FORBIDDEN)
         else:
             try:
                 hospital = Hospital.objects.get(id=hospital_id)
+            except (Hospital.DoesNotExist, ValueError, TypeError):
+                return Response({"error": "Hospital not found."}, status=status.HTTP_404_NOT_FOUND)
+            if request.user.role == "hospital_manager":
+                allowed = str(hospital.id) == str(request.user.hospital_id)
+            elif request.user.role == "operator":
+                allowed = bool(request.user.tenant_id) and str(hospital.tenant_id) == str(request.user.tenant_id)
+            else:
+                allowed = False
+            if not allowed:
+                return Response({"error": "Hospital not found."}, status=status.HTTP_404_NOT_FOUND)
+
+        if not is_network_wide:
+            try:
                 # Compute proxy scoped strictly to THIS hospital's occupancy
                 # 0.05 (5%) multiplier produces proxy values in the ~0-50 range expected by the model
                 total_occupancy = hospital.current_occupancy
@@ -52,6 +69,9 @@ class PredictionViewSet(viewsets.ViewSet):
                     "pollution_level": pollution_level,
                     "temperature": temperature,
                     "humidity": humidity,
+                    "rainfall": rainfall,
+                    "prev_day_admissions": prev_day_admissions,
+                    "weekly_avg_admissions": weekly_avg_admissions,
                     "date": target_date,
                     "city": city,
                     "day_of_week": day_of_week,
@@ -59,7 +79,7 @@ class PredictionViewSet(viewsets.ViewSet):
                 }
                 
                 import os
-                ml_url = os.environ.get("ML_SERVICE_URL", "http://localhost:8001/predict")
+                ml_url = os.environ.get("ML_SERVICE_URL", "http://ml_service:8001/predict")
                 resp = requests.post(ml_url, json=ml_payload, timeout=5)
                 resp.raise_for_status()
                 ml_data = resp.json()
@@ -139,6 +159,7 @@ class PredictionViewSet(viewsets.ViewSet):
                     **response_data,
                     "input_data": data,
                     "user_id": str(request.user.id),
+                    "tenant_id": str(request.user.tenant_id) if request.user.tenant_id else None,
                     "created_at": datetime.datetime.utcnow()
                 }
                 db.predictions.insert_one(log_doc)
@@ -161,8 +182,24 @@ class PredictionViewSet(viewsets.ViewSet):
             return Response({"results": []})
         
         try:
-            # Sort by created_at desc
-            cursor = db.predictions.find().sort("created_at", -1).limit(50)
+            # Scope history to the caller's hospital or tenant. Include legacy
+            # records without tenant_id only when their input hospital is in scope.
+            if request.user.role == "hospital_manager":
+                if not request.user.hospital_id:
+                    return Response({"results": []})
+                allowed_ids = [str(request.user.hospital_id)]
+                scope_query = {"input_data.hospital_id": {"$in": allowed_ids}}
+            elif request.user.role == "operator" and request.user.tenant_id:
+                allowed_ids = [str(hid) for hid in Hospital.objects.filter(
+                    tenant_id=request.user.tenant_id
+                ).values_list("id", flat=True)]
+                scope_query = {"$or": [
+                    {"tenant_id": str(request.user.tenant_id)},
+                    {"input_data.hospital_id": {"$in": allowed_ids}},
+                ]}
+            else:
+                return Response({"results": []})
+            cursor = db.predictions.find(scope_query).sort("created_at", -1).limit(50)
             results = []
             for doc in cursor:
                 doc['_id'] = str(doc['_id'])

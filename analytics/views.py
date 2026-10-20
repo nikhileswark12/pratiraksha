@@ -10,6 +10,18 @@ from hospitals.models import Hospital, Department, Equipment
 from pratiraksha.utils import get_mongo_db
 
 
+def _prediction_scope_query(user, hospitals):
+    """Return a MongoDB filter scoped to the authenticated user's facilities."""
+    hospital_ids = [str(hid) for hid in hospitals.values_list("id", flat=True)]
+    clauses = []
+    if hospital_ids:
+        clauses.append({"input_data.hospital_id": {"$in": hospital_ids}})
+    if user.role == "operator" and user.tenant_id:
+        # New records carry tenant_id; hospital_ids keep older records visible safely.
+        clauses.append({"tenant_id": str(user.tenant_id)})
+    return {"$or": clauses} if clauses else {"_id": {"$exists": False}}
+
+
 class AnalyticsOverviewView(views.APIView):
     permission_classes = [permissions.IsAuthenticated]
 
@@ -53,16 +65,21 @@ class AnalyticsOverviewView(views.APIView):
             week_start = today_start - datetime.timedelta(days=7)
             
             try:
-                today_predictions = db.predictions.count_documents({"created_at": {"$gte": today_start}})
-                week_predictions = db.predictions.count_documents({"created_at": {"$gte": week_start}})
+                scope = _prediction_scope_query(request.user, hospitals)
+                today_predictions = db.predictions.count_documents({
+                    "$and": [scope, {"created_at": {"$gte": today_start}}]
+                })
+                week_predictions = db.predictions.count_documents({
+                    "$and": [scope, {"created_at": {"$gte": week_start}}]
+                })
             except Exception as e:
                 return Response({"error": "Failed to query analytics data from MongoDB."}, status=status.HTTP_503_SERVICE_UNAVAILABLE)
         else:
             return Response({"error": "Analytics database unavailable."}, status=status.HTTP_503_SERVICE_UNAVAILABLE)
                 
         # 3. Operational Tracking (Day 23)
-        total_departments = Department.objects.count()
-        total_equipment = Equipment.objects.aggregate(
+        total_departments = Department.objects.filter(hospital__in=hospitals).count()
+        total_equipment = Equipment.objects.filter(hospital__in=hospitals).aggregate(
             total=Sum('quantity_total'),
             in_use=Sum('quantity_in_use'),
             maintenance=Sum('quantity_maintenance')
@@ -72,6 +89,7 @@ class AnalyticsOverviewView(views.APIView):
             "total_hospitals": total_hospitals,
             "status_summary": status_summary,
             "total_beds": total_beds,
+            "current_occupancy": total_occupancy,
             "avg_occupancy_percent": avg_occupancy,
             "predictions_today": today_predictions,
             "predictions_this_week": week_predictions,
@@ -114,9 +132,18 @@ class AnalyticsTrendsView(views.APIView):
             return Response({"error": "Invalid groupBy parameter."}, status=status.HTTP_400_BAD_REQUEST)
             
         try:
+            scoped_hospitals = (
+                Hospital.objects.filter(id=request.user.hospital_id)
+                if request.user.role == "hospital_manager"
+                else Hospital.objects.filter(tenant_id=request.user.tenant_id)
+                if request.user.tenant_id else Hospital.objects.none()
+            )
             pipeline = [
-                {"$match": {"created_at": {"$gte": start_date}}},
-                {"$project": {
+                {"$match": {"$and": [
+                    {"created_at": {"$gte": start_date}},
+                    _prediction_scope_query(request.user, scoped_hospitals)
+                ]}},
+                {"$project": {}
                     "date": {"$dateToString": {"format": date_format, "date": "$created_at"}},
                     "risk_score": 1
                 }},

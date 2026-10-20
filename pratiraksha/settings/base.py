@@ -32,7 +32,7 @@ except KeyError:
     raise ImproperlyConfigured("SECRET_KEY environment variable must be set!")
 
 # SECURITY WARNING: don't run with debug turned on in production!
-DEBUG = os.environ.get('DEBUG', 'True') == 'True'
+DEBUG = os.environ.get('DEBUG', 'False').lower() == 'true'
 
 ALLOWED_HOSTS = os.environ.get('ALLOWED_HOSTS', 'localhost,127.0.0.1').split(',')
 CORS_ALLOW_ALL_ORIGINS = False
@@ -190,13 +190,17 @@ SIMPLE_JWT = {
 }
 
 # Celery Configuration
-CELERY_BROKER_URL = os.environ.get('REDIS_URL', 'redis://localhost:6379/0')
-CELERY_RESULT_BACKEND = os.environ.get('REDIS_URL', 'redis://localhost:6379/0')
+CELERY_BROKER_URL = os.environ.get('CELERY_BROKER_URL', os.environ.get('REDIS_URL', 'redis://localhost:6379/0'))
+CELERY_RESULT_BACKEND = os.environ.get('CELERY_RESULT_BACKEND', os.environ.get('REDIS_URL', 'redis://localhost:6379/0'))
 CELERY_ACCEPT_CONTENT = ['json']
 CELERY_TASK_SERIALIZER = 'json'
 
 # MongoDB Configuration
 MONGO_URI = os.environ.get('MONGO_URI', 'mongodb://localhost:27017/pratiraksha')
+
+# Required in production for encrypted EHR fields. The field keeps a dev-only
+# fallback only while DEBUG is enabled; production fails closed without a key.
+ENCRYPTION_KEY = os.environ.get('ENCRYPTION_KEY')
 
 
 
@@ -261,7 +265,7 @@ CHANNEL_LAYERS = {
     'default': {
         'BACKEND': 'channels_redis.core.RedisChannelLayer',
         'CONFIG': {
-            'hosts': [('127.0.0.1', 6379)],
+            'hosts': [os.environ.get('REDIS_URL', 'redis://localhost:6379/1')],
         },
     },
 }
@@ -294,5 +298,5 @@ sentry_sdk.init(
         CeleryIntegration(),
     ],
     traces_sample_rate=1.0,
-    send_default_pii=True,
+    send_default_pii=False,
 )

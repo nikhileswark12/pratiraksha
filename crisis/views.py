@@ -5,6 +5,7 @@ from rest_framework.response import Response
 from django.conf import settings
 from pratiraksha.utils import get_mongo_db, log_activity
 from integrations.tasks import dispatch_webhook_event
+from hospitals.models import Hospital
 
 class CrisisSimulationView(views.APIView):
     permission_classes = [permissions.IsAuthenticated]
@@ -26,10 +27,14 @@ class CrisisSimulationView(views.APIView):
                 return Response({"error": "One or more requested hospitals not found."}, status=status.HTTP_404_NOT_FOUND)
             affected_hospitals = [str(user.hospital_id)]
         elif user.role == 'operator':
-            if requested_hospital_ids:
-                affected_hospitals = requested_hospital_ids
-            else:
-                affected_hospitals = ["all_network"]
+            if not user.tenant_id:
+                return Response({"error": "Operator has no assigned tenant."}, status=status.HTTP_403_FORBIDDEN)
+            allowed_ids = [str(hid) for hid in Hospital.objects.filter(
+                tenant_id=user.tenant_id
+            ).values_list("id", flat=True)]
+            if requested_hospital_ids and any(str(hid) not in set(allowed_ids) for hid in requested_hospital_ids):
+                return Response({"error": "One or more requested hospitals not found."}, status=status.HTTP_404_NOT_FOUND)
+            affected_hospitals = [str(hid) for hid in requested_hospital_ids] if requested_hospital_ids else allowed_ids
         else:
             return Response({"error": "Unauthorized role for simulation."}, status=status.HTTP_403_FORBIDDEN)
             

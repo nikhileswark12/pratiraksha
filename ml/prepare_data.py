@@ -59,6 +59,17 @@ def prepare_data():
     df['temperature'] = np.nan
     df['humidity'] = np.nan
     df['rainfall'] = np.nan
+
+    # Weather observations are not currently included in this repository. Impute
+    # documented neutral defaults so training doesn't drop every row; these are
+    # placeholders, not real weather observations, and should be replaced when
+    # matched IMD/weather data becomes available.
+    weather_defaults = {'temperature': 25.0, 'humidity': 50.0, 'rainfall': 0.0}
+    for column, default_value in weather_defaults.items():
+        if df[column].notna().any():
+            df[column] = df[column].fillna(df[column].median()).fillna(default_value)
+        else:
+            df[column] = default_value
     
     # 6. Historical features
     df = df.sort_values(by=['City', 'Date'])

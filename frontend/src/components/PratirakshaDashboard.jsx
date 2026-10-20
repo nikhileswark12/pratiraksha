@@ -97,24 +97,40 @@ export default function PratirakshaDashboard({ token, onLogout, onUserLoaded }) 
       ws.current.onmessage = (event) => {
         const data = JSON.parse(event.data);
         if (data.type === 'hospital.updated' || data.type === 'hospital.critical') {
-          setHospitals(prev => {
-            const updated = prev.map(h => h.id === data.hospital.id ? data.hospital : h);
-            return updated;
-          });
-          
-          // Flash animation
-          setFlashingRows(prev => {
-            const next = new Set(prev);
-            next.add(data.hospital.id);
-            return next;
-          });
-          setTimeout(() => {
+          // The server sends hospital_id + changed fields, not a full hospital object.
+          const hospitalId = data.hospital?.id || data.hospital_id;
+          if (!hospitalId) return;
+
+          const applyUpdate = async () => {
+            let updatedHospital = data.hospital;
+            if (!updatedHospital) {
+              try {
+                const response = await fetch(`/api/v1/hospitals/${hospitalId}/`, {
+                  headers: { 'Authorization': `Bearer ${token}` }
+                });
+                if (!response.ok) return;
+                updatedHospital = await response.json();
+              } catch (error) {
+                console.error('Failed to refresh hospital after WebSocket event:', error);
+                return;
+              }
+            }
+
+            setHospitals(prev => prev.map(h => String(h.id) === String(hospitalId) ? updatedHospital : h));
             setFlashingRows(prev => {
               const next = new Set(prev);
-              next.delete(data.hospital.id);
+              next.add(hospitalId);
               return next;
             });
-          }, 1000);
+            setTimeout(() => {
+              setFlashingRows(prev => {
+                const next = new Set(prev);
+                next.delete(hospitalId);
+                return next;
+              });
+            }, 1000);
+          };
+          void applyUpdate();
         }
       };
 

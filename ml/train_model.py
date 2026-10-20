@@ -94,7 +94,7 @@ for epoch in range(epochs):
         best_val_loss = val_loss
         torch.save(model.state_dict(), 'ml_service/surge_predictor_best.pth')
 
-model.load_state_dict(torch.load('ml_service/surge_predictor_best.pth'))
+model.load_state_dict(torch.load('ml_service/surge_predictor_best.pth', map_location=device, weights_only=True))
 model.eval()
 test_inputs = torch.FloatTensor(X_test_scaled).to(device)
 test_targets = torch.FloatTensor(y_test).to(device)

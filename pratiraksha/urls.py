@@ -22,13 +22,9 @@ from django.conf.urls.static import static
 
 from pratiraksha.views import health_check, ready_check
 
-def trigger_error(request):
-    division_by_zero = 1 / 0
-
 urlpatterns = [
     path('health/', health_check),
     path('ready/', ready_check),
-    path('sentry-debug/', trigger_error),
     path('admin/', admin.site.urls),
     path('api/v1/auth/', include('accounts.urls')),
     path('api/v1/hospitals/', include('hospitals.urls')),
