@@ -6,7 +6,7 @@ from django.contrib.auth import authenticate
 from rest_framework import status, views, generics, permissions
 from rest_framework.response import Response
 from rest_framework.throttling import AnonRateThrottle
-from rest_framework_simplejwt.tokens import RefreshToken
+from rest_framework_simplejwt.tokens import AccessToken, RefreshToken
 from rest_framework_simplejwt.views import TokenRefreshView
 from rest_framework_simplejwt.exceptions import InvalidToken
 from allauth.socialaccount.providers.google.views import GoogleOAuth2Adapter
@@ -69,6 +69,7 @@ class RegisterView(views.APIView):
 
 class LoginView(views.APIView):
     permission_classes = [permissions.AllowAny]
+    throttle_classes = [AnonRateThrottle]
 
     def post(self, request):
         email = request.data.get('email')
@@ -134,17 +135,24 @@ class CustomTokenRefreshView(TokenRefreshView):
             return Response({"error": "Invalid or revoked refresh token."}, status=status.HTTP_401_UNAUTHORIZED)
 
         response = super().post(request, *args, **kwargs)
-        if response.status_code == status.HTTP_200_OK and response.data.get('refresh'):
+        if response.status_code == status.HTTP_200_OK:
             try:
-                rotated = RefreshToken(response.data['refresh'])
-                rotated_jti = rotated.get('jti')
-                expires_in = int(rotated['exp'] - timezone.now().timestamp())
-                if rotated_jti and expires_in > 0:
-                    cache.set(f"jti_{rotated_jti}", "valid", timeout=expires_in)
-                    # Refresh tokens are single-use once rotation succeeds.
-                    cache.delete(f"jti_{incoming_jti}")
+                if response.data.get('refresh'):
+                    rotated = RefreshToken(response.data['refresh'])
+                    rotated_jti = rotated.get('jti')
+                    refresh_expires_in = int(rotated['exp'] - timezone.now().timestamp())
+                    if rotated_jti and refresh_expires_in > 0:
+                        cache.set(f"jti_{rotated_jti}", "valid", timeout=refresh_expires_in)
+                        # Refresh tokens are single-use once rotation succeeds.
+                        cache.delete(f"jti_{incoming_jti}")
+                if response.data.get('access'):
+                    access = AccessToken(response.data['access'])
+                    access_jti = access.get('jti')
+                    access_expires_in = int(access['exp'] - timezone.now().timestamp())
+                    if access_jti and access_expires_in > 0:
+                        cache.set(f"jti_{access_jti}", "valid", timeout=access_expires_in)
             except Exception:
-                return Response({"error": "Failed to register rotated refresh token."}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+                return Response({"error": "Failed to register rotated token identifiers."}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
         return response
 
 class MeView(generics.RetrieveAPIView):
@@ -154,12 +162,36 @@ class MeView(generics.RetrieveAPIView):
     def get_object(self):
         return self.request.user
 
-class GoogleLogin(SocialLoginView):
+class CachedSocialLoginView(SocialLoginView):
+    """Register SSO-issued token JTIs for refresh and WebSocket revocation checks."""
+
+    def post(self, request, *args, **kwargs):
+        response = super().post(request, *args, **kwargs)
+        if response.status_code == status.HTTP_200_OK and isinstance(response.data, dict):
+            try:
+                for key, token_class in (("access", AccessToken), ("refresh", RefreshToken)):
+                    token_string = response.data.get(key)
+                    if not token_string:
+                        continue
+                    token = token_class(token_string)
+                    ttl = int(token["exp"] - timezone.now().timestamp())
+                    token_jti = token.get("jti")
+                    if token_jti and ttl > 0:
+                        cache.set(f"jti_{token_jti}", "valid", timeout=ttl)
+            except Exception:
+                return Response(
+                    {"error": "Unable to initialize the session. Please retry."},
+                    status=status.HTTP_503_SERVICE_UNAVAILABLE,
+                )
+        return response
+
+
+class GoogleLogin(CachedSocialLoginView):
     adapter_class = GoogleOAuth2Adapter
     callback_url = 'http://localhost:3000/auth/google/callback'
     client_class = OAuth2Client
 
-class GitHubLogin(SocialLoginView):
+class GitHubLogin(CachedSocialLoginView):
     adapter_class = GitHubOAuth2Adapter
     callback_url = 'http://localhost:3000/auth/github/callback'
     client_class = OAuth2Client

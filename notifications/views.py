@@ -15,18 +15,28 @@ class NotificationViewSet(viewsets.ReadOnlyModelViewSet):
         user = self.request.user
         
         if user.role == 'hospital_manager':
-            # Manager sees notifications for their hospital or specifically assigned to them
-            qs = InAppNotification.objects.filter(
-                Q(hospital_id=user.hospital_id) | Q(user=user)
-            )
+            # A manager without a facility assignment may only see notifications
+            # explicitly assigned to their own account; never match NULL hospital IDs.
+            if user.hospital_id:
+                qs = InAppNotification.objects.filter(
+                    Q(hospital_id=user.hospital_id) | Q(user=user)
+                )
+            else:
+                qs = InAppNotification.objects.filter(user=user)
         elif user.role == 'operator':
-            # Operator sees notifications for their tenant, or their tenant's hospitals, or specifically assigned
-            tenant_hospitals = Hospital.objects.filter(tenant_id=user.tenant_id).values_list('id', flat=True)
-            qs = InAppNotification.objects.filter(
-                Q(tenant_id=user.tenant_id) | 
-                Q(hospital_id__in=tenant_hospitals) | 
-                Q(user=user)
-            )
+            # Unassigned operators may see only notifications addressed to them.
+            # Do not match tenant_id=NULL, which can include unrelated notifications.
+            if not user.tenant_id:
+                qs = InAppNotification.objects.filter(user=user)
+            else:
+                tenant_hospitals = Hospital.objects.filter(
+                    tenant_id=user.tenant_id
+                ).values_list('id', flat=True)
+                qs = InAppNotification.objects.filter(
+                    Q(tenant_id=user.tenant_id) |
+                    Q(hospital_id__in=tenant_hospitals) |
+                    Q(user=user)
+                )
         else:
             qs = InAppNotification.objects.none()
             

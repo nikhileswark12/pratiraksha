@@ -1,5 +1,6 @@
 from rest_framework import views, permissions, status
 from rest_framework.response import Response
+from django.http import FileResponse
 from django.utils import timezone
 from django.db.models import Count, Q
 from hospitals.models import Hospital
@@ -265,12 +266,28 @@ class DischargeSummaryStatusView(views.APIView):
         }
         
         if summary.status == 'ready' and summary.file:
-            response_data["download_url"] = request.build_absolute_uri(summary.file.url)
+            response_data["download_url"] = request.build_absolute_uri(f"{request.path}?download=1")
         elif summary.status == 'failed':
             response_data["error_message"] = summary.error_message
-            
-        log_ehr_access(summary.hospital.id, summary.encounter.patient.id, request.user, "read_discharge_summary_status", "DischargeSummary", str(summary.id), fields_accessed=["status", "file_url", "error_message"])
-            
+
+        log_ehr_access(
+            summary.hospital.id,
+            summary.encounter.patient.id,
+            request.user,
+            "read_discharge_summary_status",
+            "DischargeSummary",
+            str(summary.id),
+            fields_accessed=["status", "file_url", "error_message"],
+        )
+
+        if summary.status == 'ready' and summary.file and request.query_params.get("download") == "1":
+            return FileResponse(
+                summary.file.open("rb"),
+                as_attachment=True,
+                filename=f"discharge_summary_{summary.id}.pdf",
+                content_type="application/pdf",
+            )
+
         return Response(response_data)
 
 from django.utils.decorators import method_decorator

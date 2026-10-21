@@ -1,5 +1,6 @@
 from rest_framework import views, permissions, status
 from rest_framework.response import Response
+from django.http import FileResponse
 from django.db.models import Sum, Count
 from django.utils import timezone
 from datetime import timedelta
@@ -143,7 +144,7 @@ class AnalyticsTrendsView(views.APIView):
                     {"created_at": {"$gte": start_date}},
                     _prediction_scope_query(request.user, scoped_hospitals)
                 ]}},
-                {"$project": {}
+                {"$project": {
                     "date": {"$dateToString": {"format": date_format, "date": "$created_at"}},
                     "risk_score": 1
                 }},
@@ -322,7 +323,14 @@ class ReportStatusView(views.APIView):
         }
         
         if report.status == 'ready' and report.file:
-            response_data["download_url"] = request.build_absolute_uri(report.file.url)
+            response_data["download_url"] = request.build_absolute_uri(f"{request.path}?download=1")
+            if request.query_params.get("download") == "1":
+                return FileResponse(
+                    report.file.open("rb"),
+                    as_attachment=True,
+                    filename=f"report_{report.id}.pdf",
+                    content_type="application/pdf",
+                )
         elif report.status == 'failed':
             response_data["error_message"] = report.error_message
             

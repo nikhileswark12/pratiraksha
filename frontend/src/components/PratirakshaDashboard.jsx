@@ -88,7 +88,11 @@ export default function PratirakshaDashboard({ token, onLogout, onUserLoaded }) 
     let reconnectTimeout;
     const connectWs = () => {
       const wsProtocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
-      ws.current = new WebSocket(`${wsProtocol}//${window.location.host}/ws/hospitals/?token=${token}`);
+      // Send credentials in the WebSocket handshake subprotocol, not the URL.
+      ws.current = new WebSocket(
+        `${wsProtocol}//${window.location.host}/ws/hospitals/`,
+        ['pratiraksha', token]
+      );
 
       ws.current.onopen = () => {
         setIsConnected(true);

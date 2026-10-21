@@ -73,3 +73,22 @@ class TestInAppNotificationAPI:
         
         self.n3.refresh_from_db()
         assert self.n3.is_read is False # Not in their scope
+
+
+    def test_unassigned_operator_cannot_see_null_tenant_notifications(self, api_client):
+        unassigned = User.objects.create_user(
+            email="unassigned@test.com",
+            password="pwd",
+            role="operator",
+        )
+        unrelated = InAppNotification.objects.create(
+            tenant_id=None,
+            hospital_id=None,
+            title="Unscoped internal notification",
+            severity="CRITICAL",
+        )
+        api_client.force_authenticate(user=unassigned)
+        response = api_client.get('/api/v1/notifications/')
+        assert response.status_code == 200
+        titles = [n['title'] for n in response.json().get('results', response.json())]
+        assert unrelated.title not in titles
