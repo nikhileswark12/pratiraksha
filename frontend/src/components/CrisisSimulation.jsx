@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import { useState } from 'react';
 
 export default function CrisisSimulation({ token }) {
   const [result, setResult] = useState(null);

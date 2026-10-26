@@ -1,14 +1,19 @@
+import { beforeEach, expect, test } from 'vitest';
 import { render, screen } from '@testing-library/react';
 import { BrowserRouter } from 'react-router-dom';
 import App from './App';
 
-test('renders app title', () => {
+beforeEach(() => {
+  localStorage.clear();
+});
+
+test('renders the login screen when no access token exists', () => {
   render(
     <BrowserRouter>
       <App />
     </BrowserRouter>
   );
-  // Expect something generic or we can just verify it renders without crashing
-  expect(document.body).toBeInTheDocument();
-});
 
+  expect(screen.getByRole('heading', { name: 'Pratiraksha Login' })).toBeInTheDocument();
+  expect(screen.getByRole('button', { name: 'Sign In' })).toBeInTheDocument();
+});

@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { Bell, Check, AlertCircle, Info, AlertTriangle } from 'lucide-react';
 
 export default function NotificationCenter({ token }) {
@@ -8,25 +8,24 @@ export default function NotificationCenter({ token }) {
   const ws = useRef(null);
   const dropdownRef = useRef(null);
 
-  const fetchNotifications = async () => {
-    try {
-      const res = await fetch('/api/v1/notifications/', {
-        headers: { 'Authorization': `Bearer ${token}` }
-      });
-      if (res.ok) {
-        const data = await res.json();
-        const results = data.results || data;
-        setNotifications(results);
-        setUnreadCount(results.filter(n => !n.is_read).length);
-      }
-    } catch (err) {
-      console.error('Failed to fetch notifications:', err);
-    }
-  };
-
   useEffect(() => {
     if (!token) return;
-    fetchNotifications();
+    const loadNotifications = async () => {
+      try {
+        const res = await fetch('/api/v1/notifications/', {
+          headers: { 'Authorization': `Bearer ${token}` }
+        });
+        if (res.ok) {
+          const data = await res.json();
+          const results = data.results || data;
+          setNotifications(results);
+          setUnreadCount(results.filter(n => !n.is_read).length);
+        }
+      } catch (err) {
+        console.error('Failed to fetch notifications:', err);
+      }
+    };
+    void loadNotifications();
 
     // WebSocket Connection
     let reconnectTimeout;

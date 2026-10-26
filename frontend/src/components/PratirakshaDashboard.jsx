@@ -1,5 +1,5 @@
-import React, { useState, useEffect, useRef } from 'react';
-import { Activity, AlertTriangle, Building2, TrendingUp, Users, LogOut, Wifi, WifiOff } from 'lucide-react';
+import { useState, useEffect, useRef } from 'react';
+import { AlertTriangle, Building2, TrendingUp, Users, WifiOff } from 'lucide-react';
 import { MapContainer, TileLayer, Marker, Popup } from 'react-leaflet';
 import L from 'leaflet';
 import 'leaflet/dist/leaflet.css';
@@ -36,7 +36,6 @@ const createCustomIcon = (status, isFlashing) => {
 };
 
 export default function PratirakshaDashboard({ token, onLogout, onUserLoaded }) {
-  const [user, setUser] = useState(null);
   const [hospitals, setHospitals] = useState([]);
   const [isConnected, setIsConnected] = useState(false);
   const [loading, setLoading] = useState(true);
@@ -52,7 +51,6 @@ export default function PratirakshaDashboard({ token, onLogout, onUserLoaded }) 
         });
         if (res.ok) {
           const data = await res.json();
-          setUser(data);
           if (onUserLoaded) onUserLoaded(data);
         } else if (res.status === 401) {
           onLogout();
@@ -302,10 +300,10 @@ export default function PratirakshaDashboard({ token, onLogout, onUserLoaded }) 
                   attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
                   url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
                 />
-                {hospitals.map(h => (
+                {hospitals.filter(h => h.latitude != null && h.longitude != null && Number.isFinite(Number(h.latitude)) && Number.isFinite(Number(h.longitude))).map(h => (
                   <Marker 
                     key={h.id}
-                    position={[h.latitude || (30.85 + Math.random() * 0.1), h.longitude || (75.8 + Math.random() * 0.1)]}
+                    position={[Number(h.latitude), Number(h.longitude)]}
                     icon={createCustomIcon(h.status, flashingRows.has(h.id))}
                     eventHandlers={{
                       click: () => window.location.href = `/hospitals/${h.id}`

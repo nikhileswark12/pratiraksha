@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import { useState, useEffect } from 'react';
 import { useParams, Link } from 'react-router-dom';
 import { Building2, MapPin, Phone, ArrowLeft, Activity, Info, Archive, TrendingUp } from 'lucide-react';
 

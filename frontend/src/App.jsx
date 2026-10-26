@@ -8,7 +8,7 @@ import EHRIntegration from './components/EHRIntegration';
 import CrisisSimulation from './components/CrisisSimulation';
 import { Activity, LogOut } from 'lucide-react';
 
-function Layout({ user, token, onLogout, children }) {
+function Layout({ user, onLogout, children }) {
   return (
     <div className="min-h-screen bg-slate-50 text-slate-900 font-sans">
       <header className="bg-white border-b border-slate-200 sticky top-0 z-10">
@@ -65,8 +65,8 @@ function App() {
       let data;
       try {
         data = await res.json();
-      } catch (parseErr) {
-        throw new Error(`Server returned ${res.status} ${res.statusText}`);
+      } catch (error) {
+        throw new Error(`Server returned ${res.status} ${res.statusText}`, { cause: error });
       }
       if (res.ok) {
         localStorage.setItem('access_token', data.access);
@@ -127,7 +127,7 @@ function App() {
 
   return (
     <BrowserRouter>
-      <Layout user={user} token={token} onLogout={handleLogout}>
+      <Layout user={user} onLogout={handleLogout}>
         <Routes>
           <Route path="/" element={<PratirakshaDashboard token={token} onLogout={handleLogout} onUserLoaded={setUser} />} />
           <Route path="/hospitals" element={<HospitalList token={token} />} />

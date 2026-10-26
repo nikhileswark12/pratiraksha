@@ -1,5 +1,5 @@
-import React, { useState, useEffect } from 'react';
-import { Activity, AlertTriangle, Building2, TrendingUp, Users, ArrowLeft, Download, FileText, Loader2 } from 'lucide-react';
+import { useState, useEffect } from 'react';
+import { AlertTriangle, Building2, TrendingUp, Users, ArrowLeft, Download, FileText, Loader2 } from 'lucide-react';
 import {
   LineChart,
   Line,
@@ -126,7 +126,7 @@ export default function AnalyticsDashboard({ token }) {
     };
 
     fetchData();
-  }, [token, groupBy]); // selectedHospitals removed to prevent infinite loop on first fetch
+  }, [token, groupBy, selectedHospitals.length]);
 
   useEffect(() => {
     const fetchCompareData = async () => {
