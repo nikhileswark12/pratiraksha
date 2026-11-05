@@ -4,6 +4,7 @@ from django.contrib.auth.models import AnonymousUser
 from rest_framework_simplejwt.tokens import AccessToken
 from rest_framework_simplejwt.exceptions import InvalidToken, TokenError
 from django.contrib.auth import get_user_model
+from django.core.cache import cache
 User = get_user_model()
 
 @database_sync_to_async
@@ -11,7 +12,11 @@ def get_user_from_token(token_string):
     try:
         access_token = AccessToken(token_string)
         user_id = access_token['id']
-        return User.objects.get(id=user_id)
+        user = User.objects.get(id=user_id, is_active=True)
+        token_jti = access_token.get('jti')
+        if not token_jti or not cache.get(f"jti_{token_jti}"):
+            return AnonymousUser()
+        return user
     except (InvalidToken, TokenError, User.DoesNotExist):
         return AnonymousUser()
 

@@ -21,6 +21,8 @@ def dispatch_webhook_event(self, event_type, payload, hospital_id=None, tenant_i
     endpoints_to_notify = []
     for endpoint in qs:
         # If endpoint has a hospital set, only notify if the event is for that hospital
+        if not endpoint.hospital_id and not endpoint.tenant_id:
+            continue
         if endpoint.hospital_id and str(endpoint.hospital_id) != str(hospital_id):
             continue
             

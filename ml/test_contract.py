@@ -1,5 +1,6 @@
 import json
-import torch
+import pytest
+torch = pytest.importorskip('torch', reason='Local ML artifacts and PyTorch are optional in CI')
 import torch.nn as nn
 import pickle
 import pandas as pd
