@@ -1,7 +1,9 @@
 from rest_framework import views, permissions, status
+from rest_framework.exceptions import APIException, ValidationError
 from rest_framework.response import Response
 from django.http import FileResponse
 from django.utils import timezone
+from django.db import transaction
 from django.db.models import Count, Q
 from hospitals.models import Hospital
 from .models import (
@@ -16,9 +18,21 @@ from .tasks import generate_discharge_summary
 from pratiraksha.utils import get_mongo_db
 import datetime
 
+class AuditUnavailable(APIException):
+    status_code = 503
+    default_detail = 'EHR audit storage is unavailable; the request cannot be completed.'
+
+
+class AuditUnavailable(APIException):
+    status_code = 503
+    default_detail = "EHR audit storage is unavailable; the request cannot be completed."
+
+
 def log_ehr_access(hospital_id, patient_id, actor, action, resource_type, resource_id, fields_accessed=None):
     db = get_mongo_db()
-    if db is not None:
+    if db is None:
+        raise AuditUnavailable()
+    try:
         db.ehr_access_logs.insert_one({
             "hospital_id": str(hospital_id),
             "patient_id": str(patient_id) if patient_id else None,
@@ -28,8 +42,10 @@ def log_ehr_access(hospital_id, patient_id, actor, action, resource_type, resour
             "resource_type": resource_type,
             "resource_id": str(resource_id),
             "fields_accessed": fields_accessed or [],
-            "timestamp": datetime.datetime.utcnow()
+            "timestamp": datetime.datetime.now(datetime.timezone.utc),
         })
+    except Exception as exc:
+        raise AuditUnavailable() from exc
 
 class PatientCreateView(views.APIView):
     permission_classes = [permissions.IsAuthenticated]
@@ -48,9 +64,13 @@ class PatientCreateView(views.APIView):
         if search:
             patients = patients.filter(mrn__icontains=search)
             
-        serializer = PatientSerializer(patients[:50], many=True)
+        records = list(patients[:50])
+        scope_id = request.user.hospital_id or request.user.tenant_id or 'unassigned'
+        log_ehr_access(scope_id, None, request.user, 'list_patients', 'Patient', 'list', fields_accessed=['mrn', 'name', 'dob', 'gender', 'blood_group', 'contact_phone', 'emergency_contact'])
+        serializer = PatientSerializer(records, many=True)
         return Response(serializer.data)
 
+    @transaction.atomic
     def post(self, request):
         if request.user.role != 'hospital_manager':
             return Response({"error": "Forbidden: Only hospital managers can access EHR data."}, status=status.HTTP_403_FORBIDDEN)
@@ -61,10 +81,22 @@ class PatientCreateView(views.APIView):
             
         serializer = PatientSerializer(data=request.data)
         if serializer.is_valid():
-            # Generate MRN
-            seq = Patient.objects.filter(hospital=hospital).count() + 1
+            Hospital.objects.select_for_update().get(pk=hospital.pk)
             hospital_code = str(hospital.id)[:4].upper()
-            mrn = f"PRX-{hospital_code}-{seq:06d}"
+            mrn_prefix = f"PRX-{hospital_code}-"
+            existing_mrns = Patient.objects.filter(
+                hospital=hospital,
+                mrn__startswith=mrn_prefix,
+            ).values_list("mrn", flat=True)
+            sequence = max(
+                (
+                    int(value.rsplit("-", 1)[-1])
+                    for value in existing_mrns
+                    if value.rsplit("-", 1)[-1].isdigit()
+                ),
+                default=0,
+            ) + 1
+            mrn = f"{mrn_prefix}{sequence:06d}"
             
             patient = serializer.save(hospital=hospital, mrn=mrn)
             
@@ -84,6 +116,7 @@ class PatientCreateView(views.APIView):
 class EncounterCreateView(views.APIView):
     permission_classes = [permissions.IsAuthenticated]
 
+    @transaction.atomic
     def post(self, request):
         if request.user.role != 'hospital_manager':
             return Response({"error": "Forbidden."}, status=status.HTTP_403_FORBIDDEN)
@@ -106,6 +139,7 @@ class EncounterCreateView(views.APIView):
 class EncounterDischargeView(views.APIView):
     permission_classes = [permissions.IsAuthenticated]
 
+    @transaction.atomic
     def patch(self, request, pk):
         if request.user.role != 'hospital_manager':
             return Response({"error": "Forbidden."}, status=status.HTTP_403_FORBIDDEN)
@@ -131,13 +165,14 @@ class EncounterDischargeView(views.APIView):
             requested_by=request.user,
             status='queued'
         )
-        generate_discharge_summary.delay(str(summary.id))
+        transaction.on_commit(lambda: generate_discharge_summary.delay(str(summary.id)))
         
         return Response({"status": "DISCHARGED", "discharged_at": encounter.discharged_at, "summary_id": str(summary.id)})
 
 class EncounterCloseView(views.APIView):
     permission_classes = [permissions.IsAuthenticated]
 
+    @transaction.atomic
     def post(self, request, pk):
         if request.user.role != 'hospital_manager':
             return Response({"error": "Forbidden."}, status=status.HTTP_403_FORBIDDEN)
@@ -161,6 +196,7 @@ class BaseClinicalCreateView(views.APIView):
     serializer_class = None
     resource_name = ""
 
+    @transaction.atomic
     def post(self, request, pk):
         if request.user.role != 'hospital_manager':
             return Response({"error": "Forbidden."}, status=status.HTTP_403_FORBIDDEN)

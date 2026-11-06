@@ -20,8 +20,8 @@ async def test_ws_authentication():
     def create_data():
         from hospitals.models import Tenant
         t = Tenant.objects.create(name="Test Tenant")
-        h1 = Hospital.objects.create(name="Hospital 1", address="123", zip_code="111", tenant=t)
-        h2 = Hospital.objects.create(name="Hospital 2", address="456", zip_code="222", tenant=t)
+        h1 = Hospital.objects.create(name="Hospital 1", address="123", zip_code="111", tenant=t, total_capacity=100)
+        h2 = Hospital.objects.create(name="Hospital 2", address="456", zip_code="222", tenant=t, total_capacity=100)
         op = User.objects.create_user(email="op@test.com", password="Password1!", role="operator", tenant=t)
         hm1 = User.objects.create_user(email="hm1@test.com", password="Password1!", role="hospital_manager", hospital_id=h1.id)
         hm2 = User.objects.create_user(email="hm2@test.com", password="Password1!", role="hospital_manager", hospital_id=h2.id)

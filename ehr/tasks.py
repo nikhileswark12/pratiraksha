@@ -3,6 +3,7 @@ from celery import shared_task
 from django.conf import settings
 from django.core.files.base import ContentFile
 from io import BytesIO
+from xml.sax.saxutils import escape
 from reportlab.lib.pagesizes import letter
 from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer
 from reportlab.lib.styles import getSampleStyleSheet
@@ -30,9 +31,9 @@ def generate_discharge_summary(summary_id):
         elements.append(Paragraph(f"Discharge Summary", styles['Title']))
         elements.append(Spacer(1, 12))
         
-        elements.append(Paragraph(f"Facility: {hospital.name}", styles['Heading2']))
-        elements.append(Paragraph(f"Patient Name: {patient.name}", styles['Normal']))
-        elements.append(Paragraph(f"MRN: {patient.mrn}", styles['Normal']))
+        elements.append(Paragraph(f"Facility: {escape(str(hospital.name) if hospital.name is not None else '')}", styles['Heading2']))
+        elements.append(Paragraph(f"Patient Name: {escape(str(patient.name) if patient.name is not None else '')}", styles['Normal']))
+        elements.append(Paragraph(f"MRN: {escape(str(patient.mrn) if patient.mrn is not None else '')}", styles['Normal']))
         elements.append(Paragraph(f"Admitted: {encounter.admitted_at.strftime('%Y-%m-%d %H:%M')}", styles['Normal']))
         if encounter.discharged_at:
             elements.append(Paragraph(f"Discharged: {encounter.discharged_at.strftime('%Y-%m-%d %H:%M')}", styles['Normal']))
@@ -44,7 +45,7 @@ def generate_discharge_summary(summary_id):
         if diagnoses:
             for d in diagnoses:
                 primary_flag = " (Primary)" if d.is_primary else ""
-                elements.append(Paragraph(f"• {d.icd10_code}: {d.description}{primary_flag}", styles['Normal']))
+                elements.append(Paragraph(f"• {escape(str(d.icd10_code) if d.icd10_code is not None else '')}: {escape(str(d.description) if d.description is not None else '')}{primary_flag}", styles['Normal']))
         else:
             elements.append(Paragraph("No diagnoses recorded.", styles['Normal']))
         elements.append(Spacer(1, 12))
@@ -54,7 +55,7 @@ def generate_discharge_summary(summary_id):
         prescriptions = Prescription.objects.filter(encounter=encounter, superseded_by__isnull=True).order_by('-created_at')
         if prescriptions:
             for p in prescriptions:
-                elements.append(Paragraph(f"• {p.medication_name} - {p.dosage} - {p.frequency} (for {p.duration_days} days)", styles['Normal']))
+                elements.append(Paragraph(f"• {escape(str(p.medication_name) if p.medication_name is not None else '')} - {escape(str(p.dosage) if p.dosage is not None else '')} - {escape(str(p.frequency) if p.frequency is not None else '')} (for {p.duration_days} days)", styles['Normal']))
         else:
             elements.append(Paragraph("No medications prescribed.", styles['Normal']))
         elements.append(Spacer(1, 12))
@@ -63,7 +64,7 @@ def generate_discharge_summary(summary_id):
         elements.append(Paragraph("Latest Vitals", styles['Heading3']))
         latest_vital = Vital.objects.filter(encounter=encounter).order_by('-recorded_at').first()
         if latest_vital:
-            elements.append(Paragraph(f"BP: {latest_vital.blood_pressure} | HR: {latest_vital.heart_rate} | Temp: {latest_vital.temperature} | O2: {latest_vital.spo2}", styles['Normal']))
+            elements.append(Paragraph(f"BP: {escape(str(latest_vital.blood_pressure) if latest_vital.blood_pressure is not None else '')} | HR: {latest_vital.heart_rate} | Temp: {latest_vital.temperature} | O2: {latest_vital.spo2}", styles['Normal']))
         else:
             elements.append(Paragraph("No vitals recorded.", styles['Normal']))
 
