@@ -20,11 +20,6 @@ import datetime
 
 class AuditUnavailable(APIException):
     status_code = 503
-    default_detail = 'EHR audit storage is unavailable; the request cannot be completed.'
-
-
-class AuditUnavailable(APIException):
-    status_code = 503
     default_detail = "EHR audit storage is unavailable; the request cannot be completed."
 
 
@@ -212,21 +207,30 @@ class BaseClinicalCreateView(views.APIView):
         serializer = self.serializer_class(data=request.data)
         if serializer.is_valid():
             supersedes_id = serializer.validated_data.pop('supersedes_id', None)
-            instance = serializer.save(
-                hospital=encounter.hospital, 
-                encounter=encounter, 
-                created_by=request.user
-            )
-            
+            old_instance = None
             if supersedes_id:
+                model = self.serializer_class.Meta.model
                 try:
-                    # Generic superseded logic
-                    old_instance = self.serializer_class.Meta.model.objects.get(id=supersedes_id, encounter=encounter)
-                    old_instance.superseded_by = instance
-                    old_instance.save(update_fields=['superseded_by'])
-                except self.serializer_class.Meta.model.DoesNotExist:
-                    pass
-            
+                    old_instance = model.objects.select_for_update().get(id=supersedes_id, encounter=encounter)
+                except model.DoesNotExist:
+                    return Response(
+                        {"supersedes_id": "The record to supersede was not found in this encounter."},
+                        status=status.HTTP_400_BAD_REQUEST,
+                    )
+                if old_instance.superseded_by_id is not None:
+                    return Response(
+                        {"supersedes_id": "This record has already been superseded."},
+                        status=status.HTTP_400_BAD_REQUEST,
+                    )
+            instance = serializer.save(
+                hospital=encounter.hospital,
+                encounter=encounter,
+                created_by=request.user,
+            )
+            if old_instance is not None:
+                old_instance.superseded_by = instance
+                old_instance.save(update_fields=["superseded_by"])
+
             fields_accessed = list(serializer.validated_data.keys())
             log_ehr_access(encounter.hospital.id, encounter.patient.id, request.user, f"create_{self.resource_name}", self.resource_name, str(instance.id), fields_accessed=fields_accessed)
             

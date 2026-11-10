@@ -22,6 +22,9 @@ def generate_report_task(report_id, hospital_ids, group_by='day'):
         report.status = 'processing'
         report.save()
 
+        if group_by not in ("day", "week", "month"):
+            raise ValueError("Unsupported report grouping.")
+
         # Connect to MongoDB to get analytics data
         db = get_mongo_db()
         if db is None:
@@ -40,8 +43,12 @@ def generate_report_task(report_id, hospital_ids, group_by='day'):
         elements.append(Spacer(1, 12))
 
         for h_id, hospital in hospital_lookup.items():
-            elements.append(Paragraph(f"Facility: {hospital.name}", styles['Heading2']))
-            elements.append(Paragraph(f"Current Occupancy: {hospital.current_occupancy}% | Status: {hospital.status}", styles['Normal']))
+            from xml.sax.saxutils import escape
+            elements.append(Paragraph(f"Facility: {escape(str(hospital.name))}", styles['Heading2']))
+            elements.append(Paragraph(
+                f"Current Occupancy: {hospital.current_occupancy} | Status: {escape(str(hospital.status))}",
+                styles['Normal'],
+            ))
             elements.append(Spacer(1, 12))
             
             # Fetch prediction data from Mongo for this hospital

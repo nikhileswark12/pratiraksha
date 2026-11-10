@@ -3,7 +3,7 @@ from rest_framework import viewsets, mixins, permissions, filters
 from rest_framework.decorators import action
 from rest_framework.response import Response
 from integrations.tasks import dispatch_webhook_event
-from .models import Hospital
+from .models import Hospital, HospitalCapacitySnapshot
 from pratiraksha.utils import log_compliance_event
 from .serializers import (
     HospitalListSerializer,
@@ -60,9 +60,21 @@ class HospitalViewSet(
         
     def perform_update(self, serializer):
         # Check if status is changing
-        old_status = serializer.instance.status if serializer.instance else None
-        
+        previous = serializer.instance
+        old_status = previous.status if previous else None
+        old_capacity_state = (
+            (previous.current_occupancy, previous.total_capacity, previous.status)
+            if previous else None
+        )
         instance = serializer.save()
+        new_capacity_state = (instance.current_occupancy, instance.total_capacity, instance.status)
+        if old_capacity_state != new_capacity_state:
+            HospitalCapacitySnapshot.objects.create(
+                hospital=instance,
+                current_occupancy=instance.current_occupancy,
+                total_capacity=instance.total_capacity,
+                status=instance.status,
+            )
         
         log_compliance_event(
             actor=str(self.request.user.id),
@@ -102,14 +114,21 @@ class HospitalViewSet(
 
     @action(detail=True, methods=['get'], url_path='occupancy-trend')
     def occupancy_trend(self, request, pk=None):
-        # We still verify the object permissions
         hospital = self.get_object()
-        
-        # Stub response since predictions/EHR are Day 18+
-        dummy_trend = [
-            {"time": "08:00", "occupancy": 75},
-            {"time": "12:00", "occupancy": 82},
-            {"time": "16:00", "occupancy": 88},
-            {"time": "20:00", "occupancy": 85},
+        snapshots = list(hospital.capacity_snapshots.order_by("-captured_at")[:100])
+        trend = [
+            {
+                "time": item.captured_at.isoformat(),
+                "occupancy": item.current_occupancy,
+                "capacity": item.total_capacity,
+                "occupancy_percent": round(item.current_occupancy / item.total_capacity * 100, 2) if item.total_capacity else None,
+                "status": item.status,
+            }
+            for item in reversed(snapshots)
         ]
-        return Response({"hospital_id": hospital.id, "trend": dummy_trend})
+        return Response({
+            "hospital_id": str(hospital.id),
+            "trend": trend,
+            "history_available": bool(trend),
+            "note": None if trend else "No capacity snapshots have been recorded yet.",
+        })

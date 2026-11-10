@@ -60,9 +60,9 @@ def dispatch_notification(notification_id):
                 notification.save(update_fields=['status', 'error_message'])
                 
         elif notification.type == 'websocket':
-            # Stubbed for now, or assumed handled by consumers
-            notification.status = 'stubbed'
-            notification.save(update_fields=['status'])
+            notification.status = 'failed'
+            notification.error_message = "Direct WebSocket dispatch is unsupported; use an in-app notification event."
+            notification.save(update_fields=['status', 'error_message'])
             
         elif notification.type == 'push':
             try:
@@ -135,30 +135,30 @@ def process_status_change_notification(hospital_id, old_status, new_status, hosp
                 title='Capacity Critical',
                 message=f"{hospital_name} is now CRITICAL ({current_occupancy}/{total_capacity} beds)."
             )
-            # Create SMS/Email Notification for admins
-            notif = Notification.objects.create(
-                type='email',
-                recipient='system_admin@test.com',
-                hospital_id=hospital_id,
-                trigger_event='hospital_critical',
-                payload={
-                    "hospital_name": hospital_name,
-                    "occupancy": current_occupancy
-                }
-            )
-            dispatch_notification.delay(notif.id)
-            
-            # Create SMS Notification
-            sms_notif = Notification.objects.create(
-                type='sms',
-                recipient='+1234567890', # Stub for emergency contacts
-                hospital_id=hospital_id,
-                trigger_event='hospital_critical',
-                payload={
-                    "message": f"CRITICAL: {hospital_name} occupancy is {current_occupancy}."
-                }
-            )
-            dispatch_notification.delay(sms_notif.id)
+            for recipient in getattr(settings, "PRATIRAKSHA_ALERT_EMAILS", []):
+                notif = Notification.objects.create(
+                    type="email",
+                    recipient=recipient,
+                    hospital_id=hospital_id,
+                    trigger_event="hospital_critical",
+                    payload={
+                        "subject": "Pratiraksha critical capacity alert",
+                        "message": f"{hospital_name} is CRITICAL ({current_occupancy}/{total_capacity} beds).",
+                    },
+                )
+                dispatch_notification.delay(str(notif.id))
+
+            for recipient in getattr(settings, "PRATIRAKSHA_ALERT_SMS_RECIPIENTS", []):
+                sms_notif = Notification.objects.create(
+                    type="sms",
+                    recipient=recipient,
+                    hospital_id=hospital_id,
+                    trigger_event="hospital_critical",
+                    payload={
+                        "message": f"CRITICAL: {hospital_name} occupancy is {current_occupancy}/{total_capacity} beds."
+                    },
+                )
+                dispatch_notification.delay(str(sms_notif.id))
             
         elif new_status == 'MODERATE' and old_status == 'NORMAL':
             in_app_notif = InAppNotification.objects.create(

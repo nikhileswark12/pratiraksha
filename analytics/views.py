@@ -169,8 +169,11 @@ class AnalyticsTrendsView(views.APIView):
             
             return Response({"results": formatted_results})
             
-        except Exception as e:
-            return Response({"error": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+        except Exception:
+            return Response(
+                {"error": "Prediction trends are temporarily unavailable."},
+                status=status.HTTP_503_SERVICE_UNAVAILABLE,
+            )
 
 class AnalyticsCompareView(views.APIView):
     permission_classes = [permissions.IsAuthenticated]
@@ -181,8 +184,12 @@ class AnalyticsCompareView(views.APIView):
         
         if not hospital_ids_str:
             return Response({"error": "hospital_ids parameter is required."}, status=status.HTTP_400_BAD_REQUEST)
-            
+        if len(hospital_ids_str) > 4000:
+            return Response({"error": "Too many hospital IDs were supplied."}, status=status.HTTP_400_BAD_REQUEST)
+
         requested_ids = [hid.strip() for hid in hospital_ids_str.split(',') if hid.strip()]
+        if len(requested_ids) > 100 or len(set(requested_ids)) != len(requested_ids):
+            return Response({"error": "Provide at most 100 unique hospital IDs."}, status=status.HTTP_400_BAD_REQUEST)
         
         # RBAC Filtering
         if request.user.role == 'hospital_manager':
@@ -274,8 +281,14 @@ class ReportRequestView(views.APIView):
     def post(self, request):
         hospital_ids_str = request.data.get('hospital_ids', '')
         group_by = request.data.get('groupBy', 'day')
-        
+        if not isinstance(hospital_ids_str, str) or len(hospital_ids_str) > 4000:
+            return Response({"error": "hospital_ids must be a comma-separated string of at most 100 IDs."}, status=status.HTTP_400_BAD_REQUEST)
+        if group_by not in ("day", "week", "month"):
+            return Response({"error": "groupBy must be day, week, or month."}, status=status.HTTP_400_BAD_REQUEST)
+
         requested_ids = [hid.strip() for hid in hospital_ids_str.split(',') if hid.strip()]
+        if len(requested_ids) > 100 or len(set(requested_ids)) != len(requested_ids):
+            return Response({"error": "Provide at most 100 unique hospital IDs."}, status=status.HTTP_400_BAD_REQUEST)
         
         # RBAC Filtering
         if request.user.role == 'hospital_manager':
@@ -299,9 +312,17 @@ class ReportRequestView(views.APIView):
             status='queued'
         )
         
-        # Queue Celery task
-        generate_report_task.delay(str(report.id), requested_ids, group_by)
-        
+        try:
+            generate_report_task.delay(str(report.id), requested_ids, group_by)
+        except Exception:
+            report.status = "failed"
+            report.error_message = "The report could not be queued. Please retry later."
+            report.save(update_fields=["status", "error_message"])
+            return Response(
+                {"error": report.error_message, "report_id": str(report.id), "status": report.status},
+                status=status.HTTP_503_SERVICE_UNAVAILABLE,
+            )
+
         return Response({
             "report_id": str(report.id),
             "status": "queued",

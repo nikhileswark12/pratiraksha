@@ -300,3 +300,14 @@ sentry_sdk.init(
     traces_sample_rate=1.0,
     send_default_pii=False,
 )
+
+PRATIRAKSHA_ALERT_EMAILS = [
+    value.strip()
+    for value in os.environ.get("PRATIRAKSHA_ALERT_EMAILS", "").split(",")
+    if value.strip()
+]
+PRATIRAKSHA_ALERT_SMS_RECIPIENTS = [
+    value.strip()
+    for value in os.environ.get("PRATIRAKSHA_ALERT_SMS_RECIPIENTS", "").split(",")
+    if value.strip()
+]
